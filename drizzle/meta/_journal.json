@@ -1,0 +1,104 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1782994923128,
+      "tag": "0000_skinny_saracen",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1782995070881,
+      "tag": "0001_nifty_firestar",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1783004938352,
+      "tag": "0002_fine_quasar",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1783062647245,
+      "tag": "0003_quick_amphibian",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1783307603995,
+      "tag": "0004_moaning_peter_parker",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1783308523764,
+      "tag": "0005_sticky_quasar",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1783321404303,
+      "tag": "0006_graceful_madame_masque",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1783332501088,
+      "tag": "0007_silly_bill_hollister",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1783333391315,
+      "tag": "0008_fearless_nebula",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1783396845854,
+      "tag": "0009_secret_madelyne_pryor",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1783412448198,
+      "tag": "0010_keen_mordo",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1783478957385,
+      "tag": "0011_careless_blizzard",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1783569172098,
+      "tag": "0012_striped_fallen_one",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1783590093571,
+      "tag": "0013_flat_thanos",
+      "breakpoints": true
+    }
+  ]
+}

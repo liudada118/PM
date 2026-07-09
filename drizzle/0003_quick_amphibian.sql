@@ -1,0 +1,2 @@
+ALTER TABLE `wiki_docs` MODIFY COLUMN `templateType` enum('none','prd','meeting','flow','competitive','release','tech_design') NOT NULL DEFAULT 'none';--> statement-breakpoint
+ALTER TABLE `issues` ADD `type` enum('bug','feature','task') DEFAULT 'task' NOT NULL;

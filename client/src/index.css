@@ -1,0 +1,188 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "Inter", "SF Pro Display", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --color-background: oklch(0.985 0.002 247);
+  --color-foreground: oklch(0.145 0.012 247);
+  --color-card: oklch(1 0 0);
+  --color-card-foreground: oklch(0.145 0.012 247);
+  --color-popover: oklch(1 0 0);
+  --color-popover-foreground: oklch(0.145 0.012 247);
+  --color-primary: oklch(0.42 0.18 264);
+  --color-primary-foreground: oklch(0.985 0.002 247);
+  --color-secondary: oklch(0.96 0.005 247);
+  --color-secondary-foreground: oklch(0.35 0.012 247);
+  --color-muted: oklch(0.96 0.005 247);
+  --color-muted-foreground: oklch(0.55 0.012 247);
+  --color-accent: oklch(0.96 0.008 264);
+  --color-accent-foreground: oklch(0.35 0.018 264);
+  --color-destructive: oklch(0.577 0.245 27.325);
+  --color-destructive-foreground: oklch(0.985 0.002 247);
+  --color-border: oklch(0.91 0.005 247);
+  --color-input: oklch(0.91 0.005 247);
+  --color-ring: oklch(0.42 0.18 264);
+  --color-sidebar: oklch(0.975 0.003 247);
+  --color-sidebar-foreground: oklch(0.35 0.012 247);
+  --color-sidebar-border: oklch(0.91 0.005 247);
+  --color-sidebar-accent: oklch(0.96 0.008 264);
+  --color-sidebar-accent-foreground: oklch(0.42 0.18 264);
+
+  /* Status colors */
+  --color-status-backlog: oklch(0.65 0.01 247);
+  --color-status-todo: oklch(0.55 0.12 264);
+  --color-status-in-progress: oklch(0.58 0.18 220);
+  --color-status-in-review: oklch(0.62 0.18 50);
+  --color-status-done: oklch(0.55 0.16 145);
+
+  /* Priority colors */
+  --color-priority-urgent: oklch(0.577 0.245 27.325);
+  --color-priority-high: oklch(0.65 0.18 40);
+  --color-priority-medium: oklch(0.62 0.18 50);
+  --color-priority-low: oklch(0.65 0.01 247);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv11", "ss01";
+    font-variation-settings: "opsz" 32;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+
+  ::selection {
+    background-color: oklch(0.42 0.18 264 / 0.15);
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.82 0.005 247);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.72 0.008 247);
+  }
+}
+
+@layer utilities {
+  .container {
+    @apply mx-auto px-4 sm:px-6 lg:px-8;
+    max-width: 1280px;
+  }
+
+  .flex {
+    min-width: 0;
+    min-height: 0;
+  }
+
+  /* Elegant card with subtle shadow */
+  .card-elegant {
+    @apply bg-card rounded-xl border border-border/60 shadow-sm;
+    box-shadow: 0 1px 3px oklch(0.145 0.012 247 / 0.06), 0 1px 2px oklch(0.145 0.012 247 / 0.04);
+  }
+
+  /* Glass effect for overlays */
+  .glass {
+    background: oklch(1 0 0 / 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Subtle gradient backgrounds */
+  .gradient-subtle {
+    background: linear-gradient(135deg, oklch(0.985 0.002 247) 0%, oklch(0.975 0.006 264) 100%);
+  }
+
+  /* Text gradient */
+  .text-gradient {
+    background: linear-gradient(135deg, oklch(0.42 0.18 264), oklch(0.52 0.20 280));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Hover lift effect */
+  .hover-lift {
+    transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1), box-shadow 180ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px oklch(0.145 0.012 247 / 0.1);
+  }
+
+  /* Status badge styles */
+  .status-backlog { @apply bg-slate-100 text-slate-600; }
+  .status-todo { @apply bg-violet-50 text-violet-700; }
+  .status-in-progress { @apply bg-blue-50 text-blue-700; }
+  .status-in-review { @apply bg-amber-50 text-amber-700; }
+  .status-done { @apply bg-emerald-50 text-emerald-700; }
+
+  /* Priority badge styles */
+  .priority-urgent { @apply bg-red-50 text-red-700; }
+  .priority-high { @apply bg-orange-50 text-orange-700; }
+  .priority-medium { @apply bg-yellow-50 text-yellow-700; }
+  .priority-low { @apply bg-slate-50 text-slate-600; }
+}
+
+/* Smooth page transitions */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: fadeInUp 250ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+/* Prose styles for wiki content */
+.wiki-content {
+  @apply text-sm leading-relaxed text-foreground;
+  line-height: 1.75;
+}
+
+.wiki-content h1 { @apply text-2xl font-bold mt-8 mb-4 first:mt-0; }
+.wiki-content h2 { @apply text-xl font-semibold mt-6 mb-3 first:mt-0; }
+.wiki-content h3 { @apply text-base font-semibold mt-4 mb-2 first:mt-0; }
+.wiki-content p { @apply mb-4; }
+.wiki-content ul { @apply list-disc pl-5 mb-4 space-y-1; }
+.wiki-content ol { @apply list-decimal pl-5 mb-4 space-y-1; }
+.wiki-content code { @apply bg-muted px-1.5 py-0.5 rounded text-xs font-mono; }
+.wiki-content pre { @apply bg-muted p-4 rounded-lg mb-4 overflow-x-auto; }
+.wiki-content blockquote { @apply border-l-4 border-primary/30 pl-4 italic text-muted-foreground mb-4; }
+.wiki-content hr { @apply border-border my-6; }
+.wiki-content a { @apply text-primary underline underline-offset-2; }
+.wiki-content table { @apply w-full border-collapse mb-4; }
+.wiki-content th { @apply border border-border bg-muted px-3 py-2 text-left text-sm font-semibold; }
+.wiki-content td { @apply border border-border px-3 py-2 text-sm; }

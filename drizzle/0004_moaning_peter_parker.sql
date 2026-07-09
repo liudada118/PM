@@ -1,0 +1,1 @@
+ALTER TABLE `projects` ADD `status` enum('planning','in_progress','completed') DEFAULT 'planning' NOT NULL;
