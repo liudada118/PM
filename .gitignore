@@ -1,22 +1,33 @@
 # Dependencies
 **/node_modules
+node_modules/
+jspm_packages/
+bower_components/
+web_modules/
 .pnpm-store/
 
 # Build outputs
 dist/
 build/
+out/
 *.dist
+.output/
+build/Release
 
 # Environment variables
 .env
+.env.*
+!.env.example
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+.project-config.json
 
 # IDE and editor files
 .vscode/
 .idea/
+.vscode-test/
 *.swp
 *.swo
 *~
@@ -30,7 +41,7 @@ build/
 ehthumbs.db
 Thumbs.db
 
-# Logs
+# Logs and diagnostics
 logs
 *.log
 npm-debug.log*
@@ -38,6 +49,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # Runtime data
 pids
@@ -46,71 +58,64 @@ pids
 *.pid.lock
 *.bak
 
-# Coverage directory used by tools like istanbul
+# Coverage and tooling caches
 coverage/
+coverage
 *.lcov
-
-# nyc test coverage
 .nyc_output
-
-# Dependency directories
-jspm_packages/
-
-# TypeScript cache
-*.tsbuildinfo
-
-# Optional npm cache directory
+lib-cov
+.grunt
 .npm
-
-# Optional eslint cache
 .eslintcache
-
-# Microbundle cache
+.stylelintcache
 .rpt2_cache/
 .rts2_cache_cjs/
 .rts2_cache_es/
 .rts2_cache_umd/
-
-# Optional REPL history
-.node_repl_history
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
+.vite/
 
-# Next.js build output
+# Framework outputs
 .next
-
-# Nuxt.js build / generate output
 .nuxt
+.svelte-kit/
+.vuepress/dist
+.temp
+**/.vitepress/dist
+**/.vitepress/cache
+.docusaurus
+.serverless/
+.fusebox/
+.dynamodb/
+.firebase/
+.tern-port
 
-# Gatsby files
-.cache/
+# TypeScript
+*.tsbuildinfo
 
-# Storybook build outputs
-.out
-.storybook-out
-
-# Temporary folders
-tmp/
-temp/
+# Package artifacts
+*.tgz
+.yarn-integrity
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
 
 # Database
 *.db
 *.sqlite
 *.sqlite3
+team-collab-hub-database.sql
 
-# Webdev artifacts (checkpoint zips, migrations, etc.)
+# Webdev and platform artifacts
 .webdev/
 .manus/
-
-# Manus runtime files (auto-generated, not part of source)
 client/public/__manus__/
-.project-config.json
-team-collab-hub-database.sql
+
+# Vite files
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
