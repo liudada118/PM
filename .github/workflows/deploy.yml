@@ -44,11 +44,10 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -p "${{ secrets.SERVER_PORT }}" "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Upload build to server
         run: |
-          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SERVER_PORT }}"
+          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SERVER_PORT }} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
           # dist 用 --delete 清理旧产物（只影响 /opt/pm/dist，不碰 .env / node_modules）
           rsync -az --delete -e "$SSH" dist/ \
             "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/pm/dist/"
@@ -59,6 +58,7 @@ jobs:
       - name: Install runtime deps & restart on server
         run: |
           ssh -i ~/.ssh/deploy_key -p ${{ secrets.SERVER_PORT }} \
+            -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" '
             set -e
             cd /opt/pm
