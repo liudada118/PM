@@ -19,9 +19,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup pnpm
+        # 版本从 package.json 的 "packageManager" 字段自动读取，避免双重指定冲突。
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Setup Node
         uses: actions/setup-node@v4
