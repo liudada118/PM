@@ -1,0 +1,72 @@
+name: Deploy PM
+
+# 推送到 main 自动构建并部署；也可在 Actions 页手动触发。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 同一时间只跑一个部署，避免并发互相覆盖。
+concurrency:
+  group: deploy-pm
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (client + server bundle)
+        run: pnpm build
+        env:
+          NODE_ENV: production
+          # 前端 Forge 辅助功能用的可选变量；没配就留空，不影响核心功能。
+          VITE_FRONTEND_FORGE_API_URL: ${{ secrets.VITE_FRONTEND_FORGE_API_URL }}
+          VITE_FRONTEND_FORGE_API_KEY: ${{ secrets.VITE_FRONTEND_FORGE_API_KEY }}
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${{ secrets.SERVER_PORT }}" "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Upload build to server
+        run: |
+          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SERVER_PORT }}"
+          # dist 用 --delete 清理旧产物（只影响 /opt/pm/dist，不碰 .env / node_modules）
+          rsync -az --delete -e "$SSH" dist/ \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/pm/dist/"
+          # package.json 和 lock 单独传，不带 --delete
+          rsync -az -e "$SSH" package.json pnpm-lock.yaml \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/pm/"
+
+      - name: Install runtime deps & restart on server
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.SERVER_PORT }} \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" '
+            set -e
+            cd /opt/pm
+            # 需要含 dev 依赖：运行时会加载 vite.config（引用了若干构建插件）。
+            # install 只拉取/链接，不做重编译，不吃内存。
+            pnpm install --frozen-lockfile --prod=false
+            pm2 restart pm-collab --update-env || pm2 start dist/index.js --name pm-collab
+            pm2 save
+            pm2 status pm-collab
+          '
