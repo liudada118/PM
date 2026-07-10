@@ -42,8 +42,11 @@ jobs:
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          # tr -d '\r': 剥掉可能被带入 Secret 的 Windows 换行(CRLF),否则 ssh 无法解析私钥
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          # 快速自检：能读出指纹说明私钥格式有效
+          ssh-keygen -lf ~/.ssh/deploy_key
 
       - name: Upload build to server
         run: |
