@@ -42,10 +42,10 @@ jobs:
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          # tr -d '\r': 剥掉可能被带入 Secret 的 Windows 换行(CRLF),否则 ssh 无法解析私钥
-          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/deploy_key
+          # SSH_PRIVATE_KEY_B64 是 server.pem 的 base64(单行),规避换行/截断问题。
+          echo "${{ secrets.SSH_PRIVATE_KEY_B64 }}" | tr -d ' \r\n' | base64 -d > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          # 快速自检：能读出指纹说明私钥格式有效
+          # 自检：能读出指纹说明私钥有效，否则这里就报错、便于定位
           ssh-keygen -lf ~/.ssh/deploy_key
 
       - name: Upload build to server
