@@ -85,7 +85,7 @@ Authentication is currently local email login by default.
 ## Deployment
 
 - `.github/workflows/deploy.yml` builds the client and server bundle, uploads `dist/`, `package.json`, and `pnpm-lock.yaml` to `/opt/pm`, installs runtime dependencies, and restarts `pm2` process `pm-collab`.
-- `.github/workflows/import-db.yml` uploads `team-collab-hub-database.sql` to `/opt/pm` and imports it into the database referenced by `/opt/pm/.env` `DATABASE_URL`. It skips dump-level `CREATE DATABASE` and `USE` statements so the server environment controls the target database. The dump contains `DROP TABLE` statements, so this workflow replaces matching production tables with the dump contents.
+- `.github/workflows/import-db.yml` uploads `team-collab-hub-database.sql` to `/opt/pm` and imports it into the database referenced by `/opt/pm/.env` `DATABASE_URL`, falling back to the `pm-collab` PM2 environment. It strips dump-only MariaDB/MySQL executable comments plus dump-level `CREATE DATABASE` and `USE` statements so the server environment controls the target database. The dump contains `DROP TABLE` statements, so this workflow replaces matching production tables with the dump contents.
 - The database import workflow runs when `team-collab-hub-database.sql` or the workflow changes on `main`, and it can also be started manually from GitHub Actions.
 
 ## Update Log
@@ -97,6 +97,7 @@ Authentication is currently local email login by default.
 | 2026-07-09 | Feature | Added passwordless local email login for team members and removed analytics placeholder script. |
 | 2026-07-13 | Configuration change | Added a GitHub Actions database import workflow for the checked-in SQL dump. |
 | 2026-07-13 | Configuration change | Serialized database import with deployment and import into the configured server database. |
+| 2026-07-13 | Configuration change | Hardened database import by stripping dump helper statements and reading PM2 environment fallback. |
 
 ## Project Progress
 

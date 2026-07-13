@@ -45,15 +45,26 @@ jobs:
           fi
 
           node --input-type=module <<'NODE'
+          import { execFileSync } from "node:child_process";
           import fs from "node:fs/promises";
           import dotenv from "dotenv";
           import mysql from "mysql2/promise";
 
           dotenv.config({ path: ".env" });
 
-          const databaseUrl = process.env.DATABASE_URL;
+          let databaseUrl = process.env.DATABASE_URL;
           if (!databaseUrl) {
-            throw new Error("DATABASE_URL is missing from /opt/pm/.env or the server environment");
+            try {
+              const processes = JSON.parse(execFileSync("pm2", ["jlist"], { encoding: "utf8" }));
+              const app = processes.find((process) => process.name === "pm-collab");
+              databaseUrl = app?.pm2_env?.DATABASE_URL;
+            } catch (error) {
+              console.warn(`Unable to read DATABASE_URL from pm2: ${error.message}`);
+            }
+          }
+
+          if (!databaseUrl) {
+            throw new Error("DATABASE_URL is missing from /opt/pm/.env, the server environment, and pm2 pm-collab");
           }
 
           const separator = databaseUrl.includes("?") ? "&" : "?";
@@ -62,7 +73,8 @@ jobs:
           try {
             let sql = await fs.readFile("team-collab-hub-database.sql", "utf8");
             sql = sql
-              .replace(/^\/\*M!999999\\- enable the sandbox mode \*\/\s*/i, "")
+              .replace(/\/\*M![\s\S]*?\*\/;?/g, "")
+              .replace(/\/\*![\s\S]*?\*\/;?/g, "")
               .replace(/^CREATE DATABASE IF NOT EXISTS `[^`]+`[^;]*;\s*/gim, "")
               .replace(/^USE `[^`]+`;\s*/gim, "");
             await connection.query(sql);
