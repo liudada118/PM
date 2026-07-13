@@ -67,8 +67,10 @@ jobs:
             throw new Error("DATABASE_URL is missing from /opt/pm/.env, the server environment, and pm2 pm-collab");
           }
 
-          const separator = databaseUrl.includes("?") ? "&" : "?";
-          const connection = await mysql.createConnection(`${databaseUrl}${separator}multipleStatements=true`);
+          const connection = await mysql.createConnection({
+            uri: databaseUrl,
+            multipleStatements: true,
+          });
 
           try {
             let sql = await fs.readFile("team-collab-hub-database.sql", "utf8");

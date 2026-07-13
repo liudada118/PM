@@ -98,6 +98,7 @@ Authentication is currently local email login by default.
 | 2026-07-13 | Configuration change | Added a GitHub Actions database import workflow for the checked-in SQL dump. |
 | 2026-07-13 | Configuration change | Serialized database import with deployment and import into the configured server database. |
 | 2026-07-13 | Configuration change | Hardened database import by stripping dump helper statements and reading PM2 environment fallback. |
+| 2026-07-13 | Configuration change | Set MySQL multi-statement import explicitly instead of appending it to the database URL. |
 
 ## Project Progress
 
