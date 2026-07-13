@@ -75,10 +75,14 @@ jobs:
           try {
             let sql = await fs.readFile("team-collab-hub-database.sql", "utf8");
             sql = sql
+              .replace(/^\uFEFF/, "")
+              .replace(/^\s*--.*$/gm, "")
               .replace(/\/\*M![\s\S]*?\*\/;?/g, "")
               .replace(/\/\*![\s\S]*?\*\/;?/g, "")
+              .replace(/\/\*T![\s\S]*?\*\//g, "")
               .replace(/^CREATE DATABASE IF NOT EXISTS `[^`]+`[^;]*;\s*/gim, "")
-              .replace(/^USE `[^`]+`;\s*/gim, "");
+              .replace(/^USE `[^`]+`;\s*/gim, "")
+              .trim();
             await connection.query(sql);
 
             const [users] = await connection.query("SELECT COUNT(*) AS count FROM users");
