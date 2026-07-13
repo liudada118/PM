@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: import-pm-database
+  group: deploy-pm
   cancel-in-progress: false
 
 jobs:
@@ -40,7 +40,9 @@ jobs:
           set -u
           cd /opt/pm
 
-          pnpm install --frozen-lockfile --prod=false
+          if [ ! -d node_modules/mysql2 ]; then
+            pnpm install --frozen-lockfile --prod=false
+          fi
 
           node --input-type=module <<'NODE'
           import fs from "node:fs/promises";
@@ -58,7 +60,11 @@ jobs:
           const connection = await mysql.createConnection(`${databaseUrl}${separator}multipleStatements=true`);
 
           try {
-            const sql = await fs.readFile("team-collab-hub-database.sql", "utf8");
+            let sql = await fs.readFile("team-collab-hub-database.sql", "utf8");
+            sql = sql
+              .replace(/^\/\*M!999999\\- enable the sandbox mode \*\/\s*/i, "")
+              .replace(/^CREATE DATABASE IF NOT EXISTS `[^`]+`[^;]*;\s*/gim, "")
+              .replace(/^USE `[^`]+`;\s*/gim, "");
             await connection.query(sql);
 
             const [users] = await connection.query("SELECT COUNT(*) AS count FROM users");
