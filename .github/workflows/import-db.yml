@@ -1,0 +1,73 @@
+name: Import PM Database
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - team-collab-hub-database.sql
+      - .github/workflows/import-db.yml
+  workflow_dispatch:
+
+concurrency:
+  group: import-pm-database
+  cancel-in-progress: false
+
+jobs:
+  import-database:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY_B64 }}" | tr -d ' \r\n' | base64 -d > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keygen -lf ~/.ssh/deploy_key
+
+      - name: Upload database dump
+        run: |
+          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SERVER_PORT }} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+          rsync -az -e "$SSH" team-collab-hub-database.sql \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/pm/team-collab-hub-database.sql"
+
+      - name: Import database dump
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.SERVER_PORT }} \
+            -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" 'bash -se' <<'REMOTE'
+          set -u
+          cd /opt/pm
+
+          pnpm install --frozen-lockfile --prod=false
+
+          node --input-type=module <<'NODE'
+          import fs from "node:fs/promises";
+          import dotenv from "dotenv";
+          import mysql from "mysql2/promise";
+
+          dotenv.config({ path: ".env" });
+
+          const databaseUrl = process.env.DATABASE_URL;
+          if (!databaseUrl) {
+            throw new Error("DATABASE_URL is missing from /opt/pm/.env or the server environment");
+          }
+
+          const separator = databaseUrl.includes("?") ? "&" : "?";
+          const connection = await mysql.createConnection(`${databaseUrl}${separator}multipleStatements=true`);
+
+          try {
+            const sql = await fs.readFile("team-collab-hub-database.sql", "utf8");
+            await connection.query(sql);
+
+            const [users] = await connection.query("SELECT COUNT(*) AS count FROM users");
+            const [projects] = await connection.query("SELECT COUNT(*) AS count FROM projects");
+            console.log(`Imported team-collab-hub-database.sql: users=${users[0].count}, projects=${projects[0].count}`);
+          } finally {
+            await connection.end();
+          }
+          NODE
+
+          pm2 restart pm-collab --update-env || true
+          REMOTE
