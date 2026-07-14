@@ -476,7 +476,6 @@ CREATE TABLE `issues` (
   `priority` enum('urgent','high','medium','low') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'medium',
   `label` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `assigneeId` int DEFAULT NULL,
-  `originalAssigneeId` int DEFAULT NULL,
   `authorId` int NOT NULL,
   `dueDate` timestamp NULL DEFAULT NULL,
   `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -564,7 +563,7 @@ CREATE TABLE `project_members` (
   `id` int NOT NULL AUTO_INCREMENT,
   `projectId` int NOT NULL,
   `userId` int NOT NULL,
-  `role` enum('owner','member','tester') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'member',
+  `role` enum('owner','member') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'member',
   `joinedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */,
   UNIQUE KEY `uk_project_user` (`projectId`,`userId`)
