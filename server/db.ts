@@ -253,6 +253,7 @@ export async function getIssues(filters?: { status?: string; type?: "bug" | "fea
       priority: issues.priority,
       label: issues.label,
       assigneeId: issues.assigneeId,
+      originalAssigneeId: issues.originalAssigneeId,
       authorId: issues.authorId,
       projectId: issues.projectId,
       dueDate: issues.dueDate,
@@ -286,6 +287,7 @@ export async function createIssue(data: {
   priority?: "urgent" | "high" | "medium" | "low";
   label?: string;
   assigneeId?: number;
+  originalAssigneeId?: number | null;
   authorId: number;
   projectId?: number | null;
   dueDate?: Date;
@@ -300,6 +302,7 @@ export async function createIssue(data: {
     priority: data.priority ?? "medium",
     label: data.label ?? null,
     assigneeId: data.assigneeId ?? null,
+    originalAssigneeId: data.originalAssigneeId ?? null,
     authorId: data.authorId,
     projectId: data.projectId ?? null,
     dueDate: data.dueDate ?? null,
@@ -317,6 +320,7 @@ export async function updateIssue(
     priority?: "urgent" | "high" | "medium" | "low";
     label?: string;
     assigneeId?: number | null;
+    originalAssigneeId?: number | null;
     projectId?: number | null;
     dueDate?: Date | null;
   }
@@ -737,11 +741,19 @@ export async function getProjectMembers(projectId: number) {
     })
     .from(projectMembers)
     .leftJoin(users, eq(projectMembers.userId, users.id))
-    .where(eq(projectMembers.projectId, projectId));
+    .where(eq(projectMembers.projectId, projectId))
+    .orderBy(projectMembers.joinedAt);
   return members;
 }
 
-export async function addProjectMember(projectId: number, userId: number, role: "owner" | "member" = "member") {
+export type ProjectMemberRole = "owner" | "member" | "tester";
+
+export async function getProjectTesters(projectId: number) {
+  const members = await getProjectMembers(projectId);
+  return members.filter((member) => member.role === "tester");
+}
+
+export async function addProjectMember(projectId: number, userId: number, role: ProjectMemberRole = "member") {
   const db = await getDb();
   if (!db) return null;
   // Check if already a member
@@ -753,6 +765,16 @@ export async function addProjectMember(projectId: number, userId: number, role: 
   if (existing.length > 0) return existing[0];
   const result = await db.insert(projectMembers).values({ projectId, userId, role });
   return { id: result[0].insertId, projectId, userId, role };
+}
+
+export async function updateProjectMemberRole(projectId: number, userId: number, role: Exclude<ProjectMemberRole, "owner">) {
+  const db = await getDb();
+  if (!db) return false;
+  await db
+    .update(projectMembers)
+    .set({ role })
+    .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
+  return true;
 }
 
 export async function removeProjectMember(projectId: number, userId: number) {

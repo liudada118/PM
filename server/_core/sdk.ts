@@ -163,6 +163,9 @@ class SDKServer {
 
   private getSessionSecret() {
     const secret = ENV.cookieSecret;
+    if (!secret) {
+      throw new Error("JWT_SECRET is required for session signing");
+    }
     return new TextEncoder().encode(secret);
   }
 
@@ -352,6 +355,9 @@ class SDKServer {
     const signedInAt = new Date();
     const user = await db.getUserByOpenId(session.openId);
     if (!user) {
+      if (!ENV.isProduction) {
+        return buildSessionUser(session, signedInAt);
+      }
       throw ForbiddenError("User not found");
     }
 
@@ -391,6 +397,23 @@ function buildCronUser(
     lastSignedIn: now,
     taskUid: userInfo.taskUid ?? undefined,
     isCron: true,
+  } as AuthenticatedUser;
+}
+
+function buildSessionUser(
+  session: { openId: string; appId: string; name: string },
+  signedInAt: Date
+): AuthenticatedUser {
+  return {
+    id: 1,
+    openId: session.openId,
+    name: session.name || "Local User",
+    email: null,
+    loginMethod: "email",
+    role: "user",
+    createdAt: signedInAt,
+    updatedAt: signedInAt,
+    lastSignedIn: signedInAt,
   } as AuthenticatedUser;
 }
 

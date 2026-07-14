@@ -119,3 +119,4 @@ client/public/__manus__/
 # Vite files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+team-collab-hub-database.sql

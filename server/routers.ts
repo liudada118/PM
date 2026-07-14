@@ -43,7 +43,9 @@ import {
   updateProject,
   updateWikiDoc,
   getProjectMembers,
+  getProjectTesters,
   addProjectMember,
+  updateProjectMemberRole,
   removeProjectMember,
   isProjectMember,
   getUserMemberProjectIds,
@@ -86,6 +88,10 @@ import {
 import { storagePut, storageGetSignedUrl } from "./storage";
 import { TRPCError } from "@trpc/server";
 
+export const emailLoginInputSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+});
+
 export const appRouter = router({
   system: systemRouter,
 
@@ -93,7 +99,7 @@ export const appRouter = router({
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
     loginWithEmail: publicProcedure
-      .input(z.object({ email: z.string().email() }))
+      .input(emailLoginInputSchema)
       .mutation(async ({ input, ctx }) => {
         const user = await sdk.loginWithEmail(input.email);
         const sessionToken = await sdk.createSessionToken(user.openId, {
@@ -221,14 +227,32 @@ export const appRouter = router({
       }),
 
     addMember: protectedProcedure
-      .input(z.object({ projectId: z.number(), userId: z.number() }))
+      .input(z.object({ projectId: z.number(), userId: z.number(), role: z.enum(["member", "tester"]).optional() }))
       .mutation(async ({ input, ctx }) => {
         // Only project owner/member can add members
         const isMember = await isProjectMember(input.projectId, ctx.user.id);
         if (!isMember) {
           throw new TRPCError({ code: "FORBIDDEN", message: "你不是该项目的成员" });
         }
-        return addProjectMember(input.projectId, input.userId, "member");
+        return addProjectMember(input.projectId, input.userId, input.role ?? "member");
+      }),
+
+    updateMemberRole: protectedProcedure
+      .input(z.object({ projectId: z.number(), userId: z.number(), role: z.enum(["member", "tester"]) }))
+      .mutation(async ({ input, ctx }) => {
+        const isMember = await isProjectMember(input.projectId, ctx.user.id);
+        if (!isMember) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Not a project member" });
+        }
+        const members = await getProjectMembers(input.projectId);
+        const targetMember = members.find(m => m.userId === input.userId);
+        if (!targetMember) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Project member not found" });
+        }
+        if (targetMember.role === "owner") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot change owner role" });
+        }
+        return updateProjectMemberRole(input.projectId, input.userId, input.role);
       }),
 
     removeMember: protectedProcedure
@@ -449,13 +473,34 @@ export const appRouter = router({
             }
           }
         }
-        const result = await createIssue({ ...input, authorId: ctx.user.id });
-        // 飞书推送：新任务指派通知
-        if (input.projectId && input.assigneeId) {
-          const allUsers = await getAllUsers();
-          const assignee = allUsers.find(u => u.id === input.assigneeId);
+        const createData: any = { ...input, authorId: ctx.user.id };
+        let reviewTesterIds: number[] = [];
+        if (input.projectId && input.status === "In Review") {
+          const testers = await getProjectTesters(input.projectId);
+          if (testers.length === 0) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "项目暂无测试人员，无法进入审阅中" });
+          }
+          const primaryTester = testers[0];
+          reviewTesterIds = testers.map((tester) => tester.userId);
+          createData.originalAssigneeId = input.assigneeId ?? null;
+          createData.assigneeId = primaryTester.userId;
+        }
+        const result = await createIssue(createData);
+        if (input.projectId && reviewTesterIds.length > 0) {
           const project = await getProjectById(input.projectId);
-          sendFeishuNotificationToUser(input.assigneeId, {
+          reviewTesterIds.forEach((testerId) => {
+            sendFeishuNotificationToUser(testerId, {
+              title: "任务进入审阅",
+              content: `任务《${input.title}》已进入审阅中，请测试。\n\n项目：${project?.name ?? "未知项目"}\n提交人：${ctx.user.name ?? "用户"}`,
+            }).catch(() => {});
+          });
+        }
+        // 飞书推送：新任务指派通知
+        if (input.projectId && createData.assigneeId && reviewTesterIds.length === 0) {
+          const allUsers = await getAllUsers();
+          const assignee = allUsers.find(u => u.id === createData.assigneeId);
+          const project = await getProjectById(input.projectId);
+          sendFeishuNotificationToUser(createData.assigneeId, {
             title: "📌 新任务指派",
             content: `**${ctx.user.name ?? "用户"}** 将任务指派给了你\n\n项目：${project?.name ?? "未知项目"}\n任务：${input.title}\n优先级：${input.priority ?? "medium"}`,
           }).catch(() => {}); // fire-and-forget
@@ -501,11 +546,47 @@ export const appRouter = router({
         if (reminderMinutes !== undefined) {
           updateData.reminderMinutes = reminderMinutes ? JSON.stringify(reminderMinutes) : null;
         }
+        const targetProjectId = updateData.projectId ?? issue.projectId;
+        let reviewTesterIds: number[] = [];
+        let restoredAssigneeId: number | null = null;
+        if (input.status === "In Review" && targetProjectId) {
+          const testers = await getProjectTesters(targetProjectId);
+          if (testers.length === 0) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "项目暂无测试人员，无法进入审阅中" });
+          }
+          const primaryTester = testers[0];
+          const intendedAssigneeId = input.assigneeId !== undefined ? input.assigneeId : issue.assigneeId;
+          reviewTesterIds = testers.map((tester) => tester.userId);
+          updateData.originalAssigneeId =
+            issue.originalAssigneeId ?? (intendedAssigneeId !== primaryTester.userId ? intendedAssigneeId ?? null : null);
+          updateData.assigneeId = primaryTester.userId;
+        }
+        if ((input.status === "In Progress" || input.status === "Todo") && issue.originalAssigneeId) {
+          restoredAssigneeId = issue.originalAssigneeId;
+          updateData.assigneeId = issue.originalAssigneeId;
+          updateData.originalAssigneeId = null;
+        }
         const result = await updateIssue(id, updateData);
+        if (targetProjectId && reviewTesterIds.length > 0 && issue.status !== "In Review") {
+          const project = await getProjectById(targetProjectId);
+          reviewTesterIds.forEach((testerId) => {
+            sendFeishuNotificationToUser(testerId, {
+              title: "任务进入审阅",
+              content: `任务《${issue.title}》已进入审阅中，请测试。\n\n项目：${project?.name ?? "未知项目"}\n提交人：${ctx.user.name ?? "用户"}`,
+            }).catch(() => {});
+          });
+        }
+        if (targetProjectId && restoredAssigneeId && restoredAssigneeId !== issue.assigneeId) {
+          const project = await getProjectById(targetProjectId);
+          sendFeishuNotificationToUser(restoredAssigneeId, {
+            title: "任务退回处理",
+            content: `任务《${issue.title}》已退回到${input.status === "Todo" ? "待处理" : "进行中"}，请继续处理。\n\n项目：${project?.name ?? "未知项目"}\n操作人：${ctx.user.name ?? "用户"}`,
+          }).catch(() => {});
+        }
         // 飞书推送：任务指派变更通知
-        if (issue.projectId && input.assigneeId && input.assigneeId !== issue.assigneeId) {
-          const project = await getProjectById(issue.projectId);
-          sendFeishuNotificationToUser(input.assigneeId, {
+        if (targetProjectId && updateData.assigneeId && updateData.assigneeId !== issue.assigneeId && reviewTesterIds.length === 0 && !restoredAssigneeId) {
+          const project = await getProjectById(targetProjectId);
+          sendFeishuNotificationToUser(updateData.assigneeId, {
             title: "🔄 任务指派变更",
             content: `**${ctx.user.name ?? "用户"}** 将任务重新指派给了你\n\n项目：${project?.name ?? "未知项目"}\n任务：${issue.title}\n优先级：${issue.priority}`,
           }).catch(() => {}); // fire-and-forget

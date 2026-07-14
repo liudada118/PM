@@ -261,6 +261,7 @@ export function ArchitectureEditor({ id }: { id: number }) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showVersionPanel, setShowVersionPanel] = useState(false);
   const [previewVersionId, setPreviewVersionId] = useState<number | null>(null);
+  const [taskCreateMode, setTaskCreateMode] = useState<"parent" | "children">("parent");
   // showFlowchartEditor removed - flowchart now opens inline via flowchartView
 
   // Flowchart state: when a node has a flowchart, clicking it enters flowchart view
@@ -512,6 +513,7 @@ export function ArchitectureEditor({ id }: { id: number }) {
       toast.success("关联成功");
     },
   });
+  const silentLinkMutation = trpc.architecture.linkIssue.useMutation();
   const unlinkMutation = trpc.architecture.unlinkIssue.useMutation({
     onSuccess: () => {
       utils.architecture.getNodeIssues.invalidate({ archDocId: id });
@@ -548,6 +550,9 @@ export function ArchitectureEditor({ id }: { id: number }) {
       setNewTaskForm({ title: "", description: "", type: "task", status: "Backlog", priority: "medium", label: "", assigneeId: undefined });
     },
     onError: () => toast.error("创建任务失败"),
+  });
+  const createChildTaskMutation = trpc.issues.create.useMutation({
+    onError: () => toast.error("创建子任务失败"),
   });
 
   // Get child node names for the selected node (from Markdown hierarchy)
@@ -610,17 +615,72 @@ export function ArchitectureEditor({ id }: { id: number }) {
       label: "",
       assigneeId: undefined,
     });
+    setTaskCreateMode("parent");
     setShowCreateDialog(true);
   };
 
+  const buildParentTaskDescription = (description: string, childNames: string[]) => {
+    const baseDescription = description.trim();
+    if (childNames.length === 0) return baseDescription || undefined;
+
+    const childChecklist = childNames.map((name) => `- [ ] ${name}`).join("\n");
+    const childSection = `子任务清单：\n${childChecklist}`;
+    return baseDescription ? `${baseDescription}\n\n${childSection}` : childSection;
+  };
+
+  const buildChildTaskDescription = (description: string, parentNode: string) => {
+    const baseDescription = description.trim();
+    const parentSection = `父任务：${parentNode}`;
+    return baseDescription ? `${baseDescription}\n\n${parentSection}` : parentSection;
+  };
+
   const handleCreateTask = async () => {
-    if (!newTaskForm.title.trim()) {
+    const canCreateChildTasks = !flowchartView && !!selectedNode && childNodeNames.length > 0;
+    const isChildTaskMode = canCreateChildTasks && taskCreateMode === "children";
+
+    if (!isChildTaskMode && !newTaskForm.title.trim()) {
       toast.error("请输入任务标题");
       return;
     }
+
+    if (isChildTaskMode) {
+      const commonDescription = buildChildTaskDescription(newTaskForm.description, selectedNode!);
+      let createdCount = 0;
+
+      for (const childName of childNodeNames) {
+        const result: any = await createChildTaskMutation.mutateAsync({
+          title: childName,
+          description: commonDescription,
+          type: newTaskForm.type as "task" | "feature" | "bug",
+          status: newTaskForm.status as "Backlog" | "Todo" | "In Progress" | "In Review" | "Done",
+          priority: newTaskForm.priority as "urgent" | "high" | "medium" | "low",
+          label: newTaskForm.label || undefined,
+          assigneeId: newTaskForm.assigneeId,
+          projectId: doc?.projectId ?? currentProjectId ?? undefined,
+        });
+        const newIssueId = result?.insertId;
+        if (newIssueId) {
+          await silentLinkMutation.mutateAsync({
+            issueId: newIssueId,
+            archDocId: id,
+            nodePath: childName,
+          });
+        }
+        createdCount += 1;
+      }
+
+      utils.architecture.getNodeIssues.invalidate({ archDocId: id });
+      utils.issues.list.invalidate();
+      setShowCreateDialog(false);
+      setNewTaskForm({ title: "", description: "", type: "task", status: "Backlog", priority: "medium", label: "", assigneeId: undefined });
+      setTaskCreateMode("parent");
+      toast.success(`已创建 ${createdCount} 个子任务`);
+      return;
+    }
+
     await createTaskMutation.mutateAsync({
       title: newTaskForm.title.trim(),
-      description: newTaskForm.description || undefined,
+      description: buildParentTaskDescription(newTaskForm.description, canCreateChildTasks ? childNodeNames : []),
       type: newTaskForm.type as "task" | "feature" | "bug",
       status: newTaskForm.status as "Backlog" | "Todo" | "In Progress" | "In Review" | "Done",
       priority: newTaskForm.priority as "urgent" | "high" | "medium" | "low",
@@ -683,6 +743,9 @@ export function ArchitectureEditor({ id }: { id: number }) {
   const activeSelectedNode = flowchartView
     ? (flowchartSelectedNode ? `${flowchartView.nodePath}::${flowchartSelectedNode}` : null)
     : selectedNode;
+  const canCreateChildTasks = !flowchartView && !!selectedNode && childNodeNames.length > 0;
+  const isChildTaskMode = canCreateChildTasks && taskCreateMode === "children";
+  const isCreatingTask = createTaskMutation.isPending || createChildTaskMutation.isPending || silentLinkMutation.isPending;
 
   // Get issues for the active selected node (works for both mindmap and flowchart)
   const selectedNodeIssuesForPanel = useMemo(() => {
@@ -1063,6 +1126,7 @@ export function ArchitectureEditor({ id }: { id: number }) {
                       </Button>
                       <Button variant="default" size="sm" className="h-7 text-[11px] px-2.5" onClick={() => {
                         setNewTaskForm({ title: flowchartSelectedNode, description: "", type: "task", status: "Backlog", priority: "medium", label: "", assigneeId: undefined });
+                        setTaskCreateMode("parent");
                         setShowCreateDialog(true);
                       }}>
                         <PlusCircle className="h-3 w-3 mr-1" />新建任务
@@ -1135,36 +1199,60 @@ export function ArchitectureEditor({ id }: { id: number }) {
 
             {/* Create New Task Dialog */}
             <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-              <DialogContent className="max-w-md">
+              <DialogContent className="w-[min(96vw,560px)] max-w-none max-h-[92vh] overflow-hidden p-0">
                 <DialogHeader>
-                  <DialogTitle>新建任务并关联到: {activeSelectedNode}</DialogTitle>
+                  <DialogTitle className="px-6 pt-6 pr-12 truncate">新建任务并关联到: {activeSelectedNode}</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-4 py-2">
+                <div className="space-y-4 overflow-y-auto overflow-x-hidden px-6 py-2 max-h-[calc(92vh-9rem)]">
+                  {canCreateChildTasks && (
+                    <div className="space-y-2 rounded-md border bg-muted/30 p-3 min-w-0">
+                      <Label className="text-xs font-medium">创建范围</Label>
+                      <Select value={taskCreateMode} onValueChange={(v) => setTaskCreateMode(v as "parent" | "children")}>
+                        <SelectTrigger className="h-9 w-full min-w-0">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="max-w-[calc(100vw-2rem)]">
+                          <SelectItem value="parent">只创建父任务，描述生成子任务清单</SelectItem>
+                          <SelectItem value="children">为所有子节点分别创建任务</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <div className="max-h-28 overflow-y-auto overflow-x-hidden rounded border bg-background px-2 py-1.5">
+                        {childNodeNames.map((name, index) => (
+                          <div key={`${name}-${index}`} className="flex items-start gap-2 text-xs text-muted-foreground py-0.5 min-w-0">
+                            <span className="h-1.5 w-1.5 rounded-full bg-blue-400 shrink-0" />
+                            <span className="min-w-0 break-words leading-relaxed">{name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <Label className="text-xs font-medium">任务标题</Label>
                     <Input
                       placeholder="输入任务标题"
-                      value={newTaskForm.title}
+                      className="min-w-0"
+                      value={isChildTaskMode ? `${childNodeNames.length} 个子节点任务` : newTaskForm.title}
+                      disabled={isChildTaskMode}
                       onChange={(e) => setNewTaskForm((f) => ({ ...f, title: e.target.value }))}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs font-medium">描述（可选）</Label>
+                    <Label className="text-xs font-medium">{isChildTaskMode ? "公共描述（可选）" : "描述（可选）"}</Label>
                     <Textarea
                       placeholder="任务描述..."
-                      className="h-20 resize-none"
+                      className="h-20 min-w-0 resize-none"
                       value={newTaskForm.description}
                       onChange={(e) => setNewTaskForm((f) => ({ ...f, description: e.target.value }))}
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-2 min-w-0">
                       <Label className="text-xs font-medium">类型</Label>
                       <Select
                         value={newTaskForm.type}
                         onValueChange={(v) => setNewTaskForm((f) => ({ ...f, type: v }))}
                       >
-                        <SelectTrigger className="h-9">
+                        <SelectTrigger className="h-9 w-full min-w-0">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -1174,13 +1262,13 @@ export function ArchitectureEditor({ id }: { id: number }) {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-2 min-w-0">
                       <Label className="text-xs font-medium">优先级</Label>
                       <Select
                         value={newTaskForm.priority}
                         onValueChange={(v) => setNewTaskForm((f) => ({ ...f, priority: v }))}
                       >
-                        <SelectTrigger className="h-9">
+                        <SelectTrigger className="h-9 w-full min-w-0">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -1191,14 +1279,14 @@ export function ArchitectureEditor({ id }: { id: number }) {
                       </Select>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-2 min-w-0">
                       <Label className="text-xs font-medium">状态</Label>
                       <Select
                         value={newTaskForm.status}
                         onValueChange={(v) => setNewTaskForm((f) => ({ ...f, status: v }))}
                       >
-                        <SelectTrigger className="h-9">
+                        <SelectTrigger className="h-9 w-full min-w-0">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -1208,13 +1296,13 @@ export function ArchitectureEditor({ id }: { id: number }) {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-2 min-w-0">
                       <Label className="text-xs font-medium">标签</Label>
                       <Select
                         value={newTaskForm.label || "none"}
                         onValueChange={(v) => setNewTaskForm((f) => ({ ...f, label: v === "none" ? "" : v }))}
                       >
-                        <SelectTrigger className="h-9">
+                        <SelectTrigger className="h-9 w-full min-w-0">
                           <SelectValue placeholder="无标签" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1226,14 +1314,14 @@ export function ArchitectureEditor({ id }: { id: number }) {
                       </Select>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-2 min-w-0">
                       <Label className="text-xs font-medium">指派人</Label>
                       <Select
                         value={newTaskForm.assigneeId?.toString() || "unassigned"}
                         onValueChange={(v) => setNewTaskForm((f) => ({ ...f, assigneeId: v === "unassigned" ? undefined : Number(v) }))}
                       >
-                        <SelectTrigger className="h-9">
+                        <SelectTrigger className="h-9 w-full min-w-0">
                           <SelectValue placeholder="未指派" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1244,20 +1332,20 @@ export function ArchitectureEditor({ id }: { id: number }) {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-2 min-w-0">
                       <Label className="text-xs font-medium">所属项目</Label>
                       <Input
-                        className="h-9 text-xs bg-muted/50"
+                        className="h-9 min-w-0 text-xs bg-muted/50"
                         value={doc?.projectId ? (projects?.find((p: any) => p.id === doc.projectId)?.name || "当前项目") : "未关联项目"}
                         disabled
                       />
                     </div>
                   </div>
                 </div>
-                <DialogFooter>
+                <DialogFooter className="border-t px-6 py-4">
                   <Button variant="outline" onClick={() => setShowCreateDialog(false)}>取消</Button>
-                  <Button onClick={handleCreateTask} disabled={!newTaskForm.title.trim() || createTaskMutation.isPending}>
-                    {createTaskMutation.isPending ? "创建中..." : "创建并关联"}
+                  <Button onClick={handleCreateTask} disabled={(!isChildTaskMode && !newTaskForm.title.trim()) || isCreatingTask}>
+                    {isCreatingTask ? "创建中..." : (isChildTaskMode ? "创建所有子任务" : "创建并关联")}
                   </Button>
                 </DialogFooter>
               </DialogContent>

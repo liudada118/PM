@@ -1,11 +1,6 @@
 name: Import PM Database
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - team-collab-hub-database.sql
-      - .github/workflows/import-db.yml
   workflow_dispatch:
 
 concurrency:

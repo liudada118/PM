@@ -1,6 +1,6 @@
 # Team Collab Hub Architecture
 
-Last updated: 2026-07-13
+Last updated: 2026-07-14
 
 ## Project Overview
 
@@ -46,16 +46,35 @@ flowchart LR
   Routers --> Storage["storage and Forge helpers"]
 ```
 
+## Issue Review Flow
+
+- Project membership roles are `owner`, `member`, and `tester`; testers are configured per project from the project members dialog.
+- When an issue moves to `In Review`, the server stores the current assignee in `issues.originalAssigneeId`, assigns the issue to the project's primary tester, and sends review notifications to project testers.
+- When an issue moves back to `In Progress` or `Todo`, the server restores `assigneeId` from `originalAssigneeId`, clears the temporary review handoff, and notifies the original assignee to continue work.
+- `issues.myTodos` continues to rely on `assigneeId`, so review handoff automatically moves the issue into the tester's task list and back to the original assignee after rejection.
+
+## Architecture Task Creation
+
+- Architecture nodes can create linked issues from `client/src/pages/Architecture.tsx`.
+- When a selected node has child nodes, the create dialog offers parent-only creation or child-node creation.
+- Parent-only creation links one issue to the selected node and appends the child nodes as a Markdown checklist in the issue description.
+- Child-node creation creates one issue per child node, applies the shared task fields to each issue, and links each new issue to its matching child node.
+- The architecture task creation dialog constrains width and height, wraps long child-node labels, and scrolls internally to avoid overflowing the viewport.
+
 ## Authentication
 
 Authentication is currently local email login by default.
 
 - `server/_core/sdk.ts` verifies the `app_session_id` cookie and loads the matching user from the local database.
 - `auth.loginWithEmail` accepts an email address, matches an existing team member by email, or creates a normal member account when the email is new.
+- Email login normalizes copied input by trimming surrounding whitespace and lowercasing before validation and account lookup.
 - Session cookies are signed JWTs. Local HTTP uses `SameSite=Lax`; HTTPS keeps `SameSite=None`.
+- Development uses a fixed local-only session secret when `JWT_SECRET` is missing; production requires `JWT_SECRET` to be configured.
+- Development uses a local app id when `VITE_APP_ID` is missing and can restore a temporary session user when no database row exists.
 - `server/_core/oauth.ts` keeps `/api/oauth/callback` only as a local-session compatibility route. It no longer exchanges authorization codes with Manus.
 - The React client no longer redirects unauthorized errors to `manus.im` and no longer forwards `manus-cookie` from `sessionStorage`.
 - The React client shows an email login form when `auth.me` returns no user.
+- The login screen uses a CSS-only loading spinner to avoid auth-screen crashes from external DOM mutations around SVG icon insertion.
 
 ## API Endpoints
 
@@ -74,9 +93,10 @@ Authentication is currently local email login by default.
 | `DATABASE_URL` | MySQL/TiDB connection string |
 | `PORT` | Preferred server port, defaults to `3000` |
 | `NODE_ENV` | Enables Vite middleware when set to `development` |
-| `JWT_SECRET` | Signs local session cookies |
+| `JWT_SECRET` | Signs local session cookies; required in production |
 | `BUILT_IN_FORGE_API_URL` | Forge API base URL for storage/AI/platform helpers |
 | `BUILT_IN_FORGE_API_KEY` | Forge API key for server-side helpers |
+| `VITE_APP_ID` | App id embedded in local session tokens; development falls back to a local app id |
 | `VITE_FRONTEND_FORGE_API_URL` | Frontend Forge API base URL for map/helper components |
 | `VITE_FRONTEND_FORGE_API_KEY` | Frontend Forge API key |
 | `VITE_ANALYTICS_ENDPOINT` | Optional analytics endpoint referenced by `client/index.html` |
@@ -85,8 +105,8 @@ Authentication is currently local email login by default.
 ## Deployment
 
 - `.github/workflows/deploy.yml` builds the client and server bundle, uploads `dist/`, `package.json`, and `pnpm-lock.yaml` to `/opt/pm`, installs runtime dependencies, and restarts `pm2` process `pm-collab`.
-- `.github/workflows/import-db.yml` uploads `team-collab-hub-database.sql` to `/opt/pm` and imports it into the database referenced by `/opt/pm/.env` `DATABASE_URL`, falling back to the `pm-collab` PM2 environment. It strips the dump BOM, line comments, MariaDB/MySQL/TiDB executable comments, and dump-level `CREATE DATABASE`/`USE` statements so the server environment controls the target database. The dump contains `DROP TABLE` statements, so this workflow replaces matching production tables with the dump contents.
-- The database import workflow runs when `team-collab-hub-database.sql` or the workflow changes on `main`, and it can also be started manually from GitHub Actions.
+- `.github/workflows/import-db.yml` is manual-only and uploads `team-collab-hub-database.sql` to `/opt/pm` before importing it into the database referenced by `/opt/pm/.env` `DATABASE_URL`, falling back to the `pm-collab` PM2 environment. It strips the dump BOM, line comments, MariaDB/MySQL/TiDB executable comments, and dump-level `CREATE DATABASE`/`USE` statements so the server environment controls the target database. The dump contains `DROP TABLE` statements, so this workflow replaces matching production tables with the dump contents.
+- Database dumps are not imported automatically on `main`; production database imports require manually starting the GitHub Actions workflow.
 
 ## Update Log
 
@@ -100,6 +120,14 @@ Authentication is currently local email login by default.
 | 2026-07-13 | Configuration change | Hardened database import by stripping dump helper statements and reading PM2 environment fallback. |
 | 2026-07-13 | Configuration change | Set MySQL multi-statement import explicitly instead of appending it to the database URL. |
 | 2026-07-13 | Configuration change | Stripped dump BOM and comment lines before production database import. |
+| 2026-07-14 | Feature | Added project tester role and issue review handoff between assignees and testers. |
+| 2026-07-14 | Feature | Added parent-task checklist generation and child-node batch task creation from architecture nodes. |
+| 2026-07-14 | Bug fix | Normalized email login input and separated invalid-email errors from service login failures. |
+| 2026-07-14 | Bug fix | Added a local development session-secret fallback and explicit production JWT secret validation. |
+| 2026-07-14 | Bug fix | Replaced the auth-screen SVG loader with a CSS spinner to avoid DOM insertion errors during login loading transitions. |
+| 2026-07-14 | Bug fix | Allowed development sessions to survive missing local app id or missing database user rows after email login. |
+| 2026-07-14 | Bug fix | Constrained the architecture task creation dialog so long child-node labels and select controls stay inside the modal. |
+| 2026-07-14 | Configuration change | Disabled automatic database dump imports on `main`; database imports now require manual workflow dispatch. |
 
 ## Project Progress
 
@@ -109,3 +137,11 @@ Authentication is currently local email login by default.
 | 2026-07-09 | Local authentication mode | Browser requests automatically use a local admin user instead of redirecting to Manus OAuth. |
 | 2026-07-09 | Email account login | Team members can log in directly with an email address stored in the users table. |
 | 2026-07-13 | Production database import workflow | GitHub Actions can upload and import `team-collab-hub-database.sql` into the server database. |
+| 2026-07-14 | Tester review workflow | Issues entering review are assigned to project testers and returned to original assignees when moved back to active statuses. |
+| 2026-07-14 | Architecture task creation | Parent architecture nodes can create one checklist-style parent issue or separate linked issues for every child node. |
+| 2026-07-14 | Email login hardening | Copied or mixed-case email addresses are cleaned before login, and non-validation failures no longer appear as invalid email errors. |
+| 2026-07-14 | Local session startup | Development login works without a local `.env` `JWT_SECRET`, while production still requires a configured signing secret. |
+| 2026-07-14 | Auth loading stability | The login page no longer depends on lucide's `LoaderCircle` SVG while transitioning between unauthenticated and authenticated states. |
+| 2026-07-14 | Development auth continuity | Local email login can restore `auth.me` from a valid session cookie even when the local database is not configured. |
+| 2026-07-14 | Architecture modal layout | New-task dialogs from architecture nodes now use internal scrolling and responsive fields so long task lists do not overflow. |
+| 2026-07-14 | Manual database imports | Merging to `main` no longer imports `team-collab-hub-database.sql`; operators must start the import workflow manually when needed. |

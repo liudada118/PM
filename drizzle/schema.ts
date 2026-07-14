@@ -50,7 +50,7 @@ export const projectMembers = mysqlTable("project_members", {
   id: int("id").autoincrement().primaryKey(),
   projectId: int("projectId").notNull(),
   userId: int("userId").notNull(),
-  role: mysqlEnum("role", ["owner", "member"]).default("member").notNull(),
+  role: mysqlEnum("role", ["owner", "member", "tester"]).default("member").notNull(),
   joinedAt: timestamp("joinedAt").defaultNow().notNull(),
 });
 
@@ -84,6 +84,7 @@ export const issues = mysqlTable("issues", {
   priority: mysqlEnum("priority", ["urgent", "high", "medium", "low"]).default("medium").notNull(),
   label: varchar("label", { length: 100 }),
   assigneeId: int("assigneeId"),
+  originalAssigneeId: int("originalAssigneeId"),
   authorId: int("authorId").notNull(),
   projectId: int("projectId"),
   dueDate: timestamp("dueDate"),

@@ -507,6 +507,7 @@ function ProjectMembersDialog({
 }) {
   const { data: members, refetch: refetchMembers } = trpc.projects.members.useQuery({ projectId });
   const [searchTerm, setSearchTerm] = useState("");
+  const [newMemberRole, setNewMemberRole] = useState<"member" | "tester">("member");
   const [removeMemberConfirmId, setRemoveMemberConfirmId] = useState<number | null>(null);
 
   const addMemberMutation = trpc.projects.addMember.useMutation({
@@ -522,6 +523,14 @@ function ProjectMembersDialog({
       toast.success("成员已移除");
       refetchMembers();
       setRemoveMemberConfirmId(null);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const updateMemberRoleMutation = trpc.projects.updateMemberRole.useMutation({
+    onSuccess: () => {
+      toast.success("成员角色已更新");
+      refetchMembers();
     },
     onError: (err) => toast.error(err.message),
   });
@@ -560,9 +569,22 @@ function ProjectMembersDialog({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-[9px] h-4">
-                      {member.role === "owner" ? "创建者" : "成员"}
-                    </Badge>
+                    {member.role === "owner" ? (
+                      <Badge variant="secondary" className="text-[9px] h-4">创建者</Badge>
+                    ) : (
+                      <Select
+                        value={member.role}
+                        onValueChange={(role) => updateMemberRoleMutation.mutate({ projectId, userId: member.userId, role: role as "member" | "tester" })}
+                      >
+                        <SelectTrigger className="h-7 w-[88px] text-[10px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="member" className="text-xs">成员</SelectItem>
+                          <SelectItem value="tester" className="text-xs">测试人员</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
                     {member.role !== "owner" && (
                       <Button
                         size="icon"
@@ -591,6 +613,15 @@ function ProjectMembersDialog({
               onChange={(e) => setSearchTerm(e.target.value)}
               className="h-8 text-xs"
             />
+            <Select value={newMemberRole} onValueChange={(role) => setNewMemberRole(role as "member" | "tester")}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="member" className="text-xs">作为成员加入</SelectItem>
+                <SelectItem value="tester" className="text-xs">作为测试人员加入</SelectItem>
+              </SelectContent>
+            </Select>
             {searchTerm && (
               <div className="space-y-1 max-h-[150px] overflow-y-auto">
                 {filteredUsers.length === 0 ? (
@@ -601,7 +632,7 @@ function ProjectMembersDialog({
                       key={user.id}
                       className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
                       onClick={() => {
-                        addMemberMutation.mutate({ projectId, userId: user.id });
+                        addMemberMutation.mutate({ projectId, userId: user.id, role: newMemberRole });
                         setSearchTerm("");
                       }}
                     >

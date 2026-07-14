@@ -10,6 +10,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { ProjectProvider } from "./contexts/ProjectContext";
 import DashboardLayout from "./components/DashboardLayout";
+import { TRPCClientError } from "@trpc/client";
 import Dashboard from "./pages/Dashboard";
 import WikiList from "./pages/WikiList";
 import WikiEditor from "./pages/WikiEditor";
@@ -26,7 +27,15 @@ import MergedArchitecture from "./pages/MergedArchitecture";
 import ProjectOverview from "./pages/ProjectOverview";
 import { useAuth } from "./_core/hooks/useAuth";
 import { FormEvent, useState } from "react";
-import { Loader2 } from "lucide-react";
+
+function InlineSpinner({ className = "" }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-block rounded-full border-2 border-current border-r-transparent animate-spin ${className}`}
+    />
+  );
+}
 
 function EmailLogin() {
   const { loginWithEmail, error, loading } = useAuth();
@@ -36,11 +45,16 @@ function EmailLogin() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLocalError(null);
+    const normalizedEmail = email.trim().toLowerCase();
 
     try {
-      await loginWithEmail(email);
-    } catch {
-      setLocalError("请输入有效邮箱后重试");
+      await loginWithEmail(normalizedEmail);
+    } catch (error) {
+      if (error instanceof TRPCClientError && error.data?.code === "BAD_REQUEST") {
+        setLocalError("请输入有效邮箱后重试");
+        return;
+      }
+      setLocalError("登录失败，请检查服务或稍后重试");
     }
   };
 
@@ -68,7 +82,10 @@ function EmailLogin() {
             autoComplete="email"
             placeholder="name@example.com"
             value={email}
-            onChange={event => setEmail(event.target.value)}
+            onChange={event => {
+              setEmail(event.target.value);
+              setLocalError(null);
+            }}
             required
           />
         </div>
@@ -80,7 +97,7 @@ function EmailLogin() {
         )}
 
         <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          {loading ? <InlineSpinner className="h-4 w-4" /> : null}
           直接登录
         </Button>
       </form>
@@ -95,7 +112,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <InlineSpinner className="h-8 w-8 text-primary" />
           <p className="text-sm text-muted-foreground">加载工作空间…</p>
         </div>
       </div>

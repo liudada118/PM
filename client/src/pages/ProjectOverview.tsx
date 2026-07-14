@@ -437,7 +437,7 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium truncate">{m.userName || "未知用户"}</p>
-                      <p className="text-[10px] text-muted-foreground">{m.role === "owner" ? "管理员" : "成员"}</p>
+                      <p className="text-[10px] text-muted-foreground">{m.role === "owner" ? "管理员" : m.role === "tester" ? "测试人员" : "成员"}</p>
                     </div>
                   </div>
                 ))}
