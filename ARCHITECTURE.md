@@ -53,9 +53,18 @@ flowchart LR
 - When an issue moves back to `In Progress` or `Todo`, the server restores `assigneeId` from `originalAssigneeId`, clears the temporary review handoff, and notifies the original assignee to continue work.
 - `issues.myTodos` continues to rely on `assigneeId`, so review handoff automatically moves the issue into the tester's task list and back to the original assignee after rejection.
 
+## Task Board
+
+- `client/src/pages/IssueBoard.tsx` renders status columns with dnd-kit and updates issue status through `issues.update`.
+- Drag-and-drop status changes use pointer-based column detection and explicit droppable metadata so the target status follows the column under the cursor instead of the nearest column corner.
+- Failed drag status updates roll back the optimistic board state and display the server error message.
+
 ## Architecture Task Creation
 
 - Architecture nodes can create linked issues from `client/src/pages/Architecture.tsx`.
+- Project cards in `client/src/pages/ProjectSettings.tsx` can open the project's architecture diagram directly; parent projects with children open the merged architecture view.
+- Top-level project cards can open the create-project dialog with the selected project prefilled as the parent, allowing direct child-project creation.
+- Project management groups child projects by parent inside each status column; collapse state is scoped to the parent and column so folding one status column does not hide the same parent's children elsewhere.
 - When a selected node has child nodes, the create dialog offers parent-only creation or child-node creation.
 - Parent-only creation links one issue to the selected node and appends the child nodes as a Markdown checklist in the issue description.
 - Child-node creation creates one issue per child node, applies the shared task fields to each issue, and links each new issue to its matching child node.
@@ -128,6 +137,9 @@ Authentication is currently local email login by default.
 | 2026-07-14 | Bug fix | Allowed development sessions to survive missing local app id or missing database user rows after email login. |
 | 2026-07-14 | Bug fix | Constrained the architecture task creation dialog so long child-node labels and select controls stay inside the modal. |
 | 2026-07-14 | Configuration change | Disabled automatic database dump imports on `main`; database imports now require manual workflow dispatch. |
+| 2026-07-14 | Feature | Added project-card shortcuts for opening architecture diagrams and creating child projects from parent projects. |
+| 2026-07-14 | Bug fix | Grouped cross-status child projects under parent headings and scoped project-card collapse by status column. |
+| 2026-07-14 | Bug fix | Fixed task-board drag target detection so tasks move to the column under the cursor and show errors on failed status changes. |
 
 ## Project Progress
 
@@ -145,3 +157,6 @@ Authentication is currently local email login by default.
 | 2026-07-14 | Development auth continuity | Local email login can restore `auth.me` from a valid session cookie even when the local database is not configured. |
 | 2026-07-14 | Architecture modal layout | New-task dialogs from architecture nodes now use internal scrolling and responsive fields so long task lists do not overflow. |
 | 2026-07-14 | Manual database imports | Merging to `main` no longer imports `team-collab-hub-database.sql`; operators must start the import workflow manually when needed. |
+| 2026-07-14 | Project management shortcuts | Project management cards now link directly to architecture diagrams and parent projects can start child-project creation in place. |
+| 2026-07-14 | Project hierarchy display | Child projects in a different status column now show their parent title and can be folded independently per column. |
+| 2026-07-14 | Task-board drag stability | Dragging tasks now resolves the destination from pointer-hit columns and reports backend status-change errors to the user. |

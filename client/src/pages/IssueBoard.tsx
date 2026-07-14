@@ -84,7 +84,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  closestCorners,
+  pointerWithin,
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
@@ -119,9 +119,26 @@ type IssueType = keyof typeof TYPE_CONFIG;
 
 const LABELS = ["缺陷", "功能", "技术债", "设计", "前端", "后端", "移动端", "API"];
 
+const isStatus = (value: unknown): value is Status =>
+  typeof value === "string" && (STATUSES as readonly string[]).includes(value);
+
+const resolveDropStatus = (over: DragEndEvent["over"]): Status | null => {
+  if (!over) return null;
+
+  const data = over.data.current as { status?: unknown; issue?: { status?: unknown } } | undefined;
+  if (isStatus(data?.status)) return data.status;
+  if (isStatus(data?.issue?.status)) return data.issue.status;
+  if (isStatus(over.id)) return over.id;
+
+  return null;
+};
+
 // ─── Droppable Column ────────────────────────────────────────────────────────
 function DroppableColumn({ status, children }: { status: Status; children: React.ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({ id: status });
+  const { setNodeRef, isOver } = useDroppable({
+    id: `status-${status}`,
+    data: { type: "status", status },
+  });
   return (
     <div
       ref={setNodeRef}
@@ -136,7 +153,7 @@ function DroppableColumn({ status, children }: { status: Status; children: React
 function DraggableCard({ issue, children }: { issue: any; children: React.ReactNode }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: issue.id,
-    data: { issue },
+    data: { type: "issue", issue, status: issue.status },
   });
   const style = {
     opacity: isDragging ? 0.3 : 1,
@@ -221,8 +238,9 @@ export default function IssueBoard() {
       );
       return { prev };
     },
-    onError: (_, __, ctx) => {
+    onError: (error, __, ctx) => {
       if (ctx?.prev) utils.issues.list.setData({ projectId: currentProjectId }, ctx.prev);
+      toast.error(error.message || "移动任务失败");
     },
     onSettled: () => utils.issues.list.invalidate(),
   });
@@ -269,7 +287,8 @@ export default function IssueBoard() {
     const { active, over } = event;
     if (!over) return;
     const issueId = active.id as number;
-    const newStatus = over.id as Status;
+    const newStatus = resolveDropStatus(over);
+    if (!newStatus) return;
     const issue = issues?.find((i) => i.id === issueId);
     if (issue && issue.status !== newStatus) {
       updateStatusMutation.mutate({ id: issueId, status: newStatus });
@@ -355,7 +374,7 @@ export default function IssueBoard() {
         ) : (
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCorners}
+            collisionDetection={pointerWithin}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >

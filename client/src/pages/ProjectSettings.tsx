@@ -20,10 +20,11 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, FolderOpen, Pencil, Archive, RotateCcw, CircleDot, GripVertical, CalendarDays, Users, UserPlus, X, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, FolderOpen, Pencil, Archive, RotateCcw, CircleDot, GripVertical, CalendarDays, Users, UserPlus, X, ChevronDown, ChevronRight, Network, FolderPlus } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 import {
   DndContext,
   DragOverlay,
@@ -51,8 +52,10 @@ const STATUS_COLUMNS = [
 
 export default function ProjectSettings() {
   const { projects, refetch } = useProject();
+  const [, setLocation] = useLocation();
   const { data: projectsProgress } = trpc.dashboard.projectsProgress.useQuery();
   const { data: allUsers } = trpc.auth.allUsers.useQuery();
+  const { data: architectureDocs, refetch: refetchArchitectureDocs } = trpc.architecture.listAll.useQuery();
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState("");
@@ -65,13 +68,14 @@ export default function ProjectSettings() {
   const [activeId, setActiveId] = useState<number | null>(null);
   const [membersProjectId, setMembersProjectId] = useState<number | null>(null);
   const [archiveConfirmId, setArchiveConfirmId] = useState<number | null>(null);
-  const [collapsedParents, setCollapsedParents] = useState<Set<number>>(new Set());
+  const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set());
 
-  const handleToggleCollapse = (id: number) => {
+  const handleToggleCollapse = (id: number, columnId: string) => {
+    const key = `${columnId}:${id}`;
     setCollapsedParents(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -113,6 +117,13 @@ export default function ProjectSettings() {
     },
   });
 
+  const createArchitectureMutation = trpc.architecture.create.useMutation({
+    onSuccess: () => {
+      refetchArchitectureDocs();
+    },
+    onError: (err) => toast.error(err.message || "打开架构图失败"),
+  });
+
   function resetForm() {
     setName("");
     setDescription("");
@@ -134,6 +145,43 @@ export default function ProjectSettings() {
     setDeadline(project.deadline ? new Date(project.deadline).toISOString().split("T")[0] : "");
     setParentId(project.parentId || null);
     setShowCreate(true);
+  }
+
+  function startCreateChild(parentProject: any) {
+    setEditingId(null);
+    setName("");
+    setDescription("");
+    setColor(parentProject.color || PROJECT_COLORS[0]);
+    setIcon(parentProject.icon || PROJECT_ICONS[0]);
+    setStatus("planning");
+    setDeadline("");
+    setParentId(parentProject.id);
+    setShowCreate(true);
+  }
+
+  async function openProjectArchitecture(project: any) {
+    const hasChildren = activeProjects.some((p) => p.parentId === project.id && !p.isArchived);
+    if (!project.parentId && hasChildren) {
+      setLocation(`/architecture/merged/${project.id}`);
+      return;
+    }
+
+    const existingDoc = architectureDocs?.find((doc: any) => doc.projectId === project.id);
+    if (existingDoc) {
+      setLocation(`/architecture/${existingDoc.id}`);
+      return;
+    }
+
+    const defaultContent = `# ${project.name}\n\n## 模块一\n- 子模块 A\n- 子模块 B\n\n## 模块二\n- 子模块 C\n- 子模块 D\n`;
+    const result: any = await createArchitectureMutation.mutateAsync({
+      title: `${project.name} 架构图`,
+      content: defaultContent,
+      projectId: project.id,
+    });
+    if (result?.insertId) {
+      toast.success("已创建项目架构图");
+      setLocation(`/architecture/${result.insertId}`);
+    }
   }
 
   function handleSubmit() {
@@ -184,7 +232,7 @@ export default function ProjectSettings() {
           </DialogTrigger>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>{editingId ? "编辑项目" : "新建项目"}</DialogTitle>
+              <DialogTitle>{editingId ? "编辑项目" : parentId ? "新建子项目" : "新建项目"}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-2">
               <div className="space-y-2">
@@ -270,7 +318,7 @@ export default function ProjectSettings() {
                 </div>
               </div>
               <Button onClick={handleSubmit} className="w-full" disabled={createMutation.isPending || updateMutation.isPending}>
-                {editingId ? "保存修改" : "创建项目"}
+                {editingId ? "保存修改" : parentId ? "创建子项目" : "创建项目"}
               </Button>
             </div>
           </DialogContent>
@@ -283,7 +331,7 @@ export default function ProjectSettings() {
           {STATUS_COLUMNS.map((col) => {
             const colProjects = activeProjects.filter((p) => (p.status || "planning") === col.id);
             return (
-              <StatusColumn key={col.id} column={col} projects={colProjects} allProjects={activeProjects} projectsProgress={projectsProgress} onEdit={startEdit} onArchive={(id) => setArchiveConfirmId(id)} onMembers={(id) => setMembersProjectId(id)} collapsedParents={collapsedParents} onToggleCollapse={handleToggleCollapse} />
+              <StatusColumn key={col.id} column={col} projects={colProjects} allProjects={activeProjects} projectsProgress={projectsProgress} onEdit={startEdit} onArchive={(id) => setArchiveConfirmId(id)} onMembers={(id) => setMembersProjectId(id)} onOpenArchitecture={openProjectArchitecture} onCreateChild={startCreateChild} collapsedParents={collapsedParents} onToggleCollapse={handleToggleCollapse} />
             );
           })}
         </div>
@@ -294,6 +342,8 @@ export default function ProjectSettings() {
               progress={projectsProgress?.find((p) => p.id === draggedProject.id)}
               onEdit={() => {}}
               onArchive={() => {}}
+              onOpenArchitecture={() => {}}
+              onCreateChild={() => {}}
               isDragging
             />
           )}
@@ -369,6 +419,8 @@ function StatusColumn({
   onEdit,
   onArchive,
   onMembers,
+  onOpenArchitecture,
+  onCreateChild,
   collapsedParents,
   onToggleCollapse,
 }: {
@@ -379,10 +431,13 @@ function StatusColumn({
   onEdit: (p: any) => void;
   onArchive: (id: number) => void;
   onMembers?: (id: number) => void;
-  collapsedParents: Set<number>;
-  onToggleCollapse: (id: number) => void;
+  onOpenArchitecture: (p: any) => void;
+  onCreateChild: (p: any) => void;
+  collapsedParents: Set<string>;
+  onToggleCollapse: (id: number, columnId: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
+  const getCollapseKey = (parentId: number) => `${column.id}:${parentId}`;
 
   return (
     <div
@@ -404,20 +459,25 @@ function StatusColumn({
             const childrenInCol = childProjects.filter(c => c.parentId === project.id);
             const childrenGlobal = allProjects.filter(c => c.parentId === project.id);
             const hasChildren = childrenGlobal.length > 0;
-            const isCollapsed = collapsedParents.has(project.id);
+            const hasChildrenInCol = childrenInCol.length > 0;
+            const isCollapsed = collapsedParents.has(getCollapseKey(project.id));
 
             if (hasChildren) {
               rendered.push(
                 <div key={project.id} className="space-y-2">
                   <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => onToggleCollapse(project.id)}
-                      className="p-0.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-                    >
-                      {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                    </button>
+                    {hasChildrenInCol ? (
+                      <button
+                        onClick={() => onToggleCollapse(project.id, column.id)}
+                        className="p-0.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                      >
+                        {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      </button>
+                    ) : (
+                      <span className="w-4" />
+                    )}
                     <span className="text-[10px] text-muted-foreground">
-                      {childrenGlobal.length} 个子项目
+                      {hasChildrenInCol ? `${childrenInCol.length} 个本列子项目` : `共 ${childrenGlobal.length} 个子项目`}
                     </span>
                   </div>
                   <DraggableProjectCard
@@ -426,8 +486,10 @@ function StatusColumn({
                     onEdit={onEdit}
                     onArchive={onArchive}
                     onMembers={onMembers}
+                    onOpenArchitecture={onOpenArchitecture}
+                    onCreateChild={onCreateChild}
                   />
-                  {!isCollapsed && childrenInCol.map((child) => (
+                  {hasChildrenInCol && !isCollapsed && childrenInCol.map((child) => (
                     <div key={child.id} className="ml-6 border-l-2 border-primary/20 pl-2">
                       <DraggableProjectCard
                         project={{ ...child, parentName: project.name }}
@@ -435,6 +497,8 @@ function StatusColumn({
                         onEdit={onEdit}
                         onArchive={onArchive}
                         onMembers={onMembers}
+                        onOpenArchitecture={onOpenArchitecture}
+                        onCreateChild={onCreateChild}
                       />
                     </div>
                   ))}
@@ -449,29 +513,56 @@ function StatusColumn({
                   onEdit={onEdit}
                   onArchive={onArchive}
                   onMembers={onMembers}
+                  onOpenArchitecture={onOpenArchitecture}
+                  onCreateChild={onCreateChild}
                 />
               );
             }
           });
           // 没有父项目在本列的孤立子项目（父项目在其他列）
           const orphanChildren = childProjects.filter(c => !parentProjects.some(p => p.id === c.parentId));
+          const orphanGroups = new Map<number, any[]>();
           orphanChildren.forEach((child) => {
-            const parentName = projects.find(p => p.id === child.parentId)?.name || allProjects?.find((p: any) => p.id === child.parentId)?.name;
-            const parentProject = allProjects.find(p => p.id === child.parentId);
-            const isParentCollapsed = parentProject ? collapsedParents.has(parentProject.id) : false;
-            if (!isParentCollapsed) {
-              rendered.push(
-                <div key={child.id} className="ml-6 border-l-2 border-primary/20 pl-2">
+            if (!child.parentId) return;
+            const siblings = orphanGroups.get(child.parentId) ?? [];
+            siblings.push(child);
+            orphanGroups.set(child.parentId, siblings);
+          });
+          orphanGroups.forEach((children, parentId) => {
+            const parentProject = allProjects.find(p => p.id === parentId);
+            const parentName = parentProject?.name || "未知父项目";
+            const isParentCollapsed = collapsedParents.has(getCollapseKey(parentId));
+            rendered.push(
+              <div key={`parent-group-${parentId}`} className="space-y-2 rounded-lg border border-dashed border-primary/20 bg-background/60 p-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <button
+                    onClick={() => onToggleCollapse(parentId, column.id)}
+                    className="p-0.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                  >
+                    {isParentCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  </button>
+                  <span className="text-xs font-medium truncate">
+                    {parentProject?.icon || "📁"} {parentName}
+                  </span>
+                  <Badge variant="outline" className="ml-auto h-4 px-1 text-[9px] shrink-0">
+                    {children.length} 个子项目
+                  </Badge>
+                </div>
+                {!isParentCollapsed && children.map((child) => (
+                  <div key={child.id} className="ml-5 border-l-2 border-primary/20 pl-2">
                   <DraggableProjectCard
                     project={{ ...child, parentName: parentName || undefined }}
                     progress={projectsProgress?.find((p) => p.id === child.id)}
                     onEdit={onEdit}
                     onArchive={onArchive}
                     onMembers={onMembers}
+                    onOpenArchitecture={onOpenArchitecture}
+                    onCreateChild={onCreateChild}
                   />
                 </div>
-              );
-            }
+                ))}
+              </div>
+            );
           });
           return rendered;
         })()}
@@ -485,13 +576,29 @@ function StatusColumn({
   );
 }
 
-function DraggableProjectCard({ project, progress, onEdit, onArchive, onMembers }: { project: any; progress: any; onEdit: (p: any) => void; onArchive: (id: number) => void; onMembers?: (id: number) => void }) {
+function DraggableProjectCard({
+  project,
+  progress,
+  onEdit,
+  onArchive,
+  onMembers,
+  onOpenArchitecture,
+  onCreateChild,
+}: {
+  project: any;
+  progress: any;
+  onEdit: (p: any) => void;
+  onArchive: (id: number) => void;
+  onMembers?: (id: number) => void;
+  onOpenArchitecture: (p: any) => void;
+  onCreateChild: (p: any) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: project.id });
   const style = transform ? { transform: `translate(${transform.x}px, ${transform.y}px)` } : undefined;
 
   return (
     <div ref={setNodeRef} style={style} className={isDragging ? "opacity-40" : ""}>
-      <ProjectCard project={project} progress={progress} onEdit={onEdit} onArchive={onArchive} onMembers={onMembers} dragHandleProps={{ ...attributes, ...listeners }} />
+      <ProjectCard project={project} progress={progress} onEdit={onEdit} onArchive={onArchive} onMembers={onMembers} onOpenArchitecture={onOpenArchitecture} onCreateChild={onCreateChild} dragHandleProps={{ ...attributes, ...listeners }} />
     </div>
   );
 }
@@ -688,6 +795,8 @@ function ProjectCard({
   onEdit,
   onArchive,
   onMembers,
+  onOpenArchitecture,
+  onCreateChild,
   isDragging,
   dragHandleProps,
 }: {
@@ -696,6 +805,8 @@ function ProjectCard({
   onEdit: (p: any) => void;
   onArchive: (id: number) => void;
   onMembers?: (id: number) => void;
+  onOpenArchitecture: (p: any) => void;
+  onCreateChild: (p: any) => void;
   isDragging?: boolean;
   dragHandleProps?: any;
 }) {
@@ -719,6 +830,14 @@ function ProjectCard({
             {project.parentId && <Badge variant="outline" className="text-[9px] h-4 px-1 shrink-0">{project.parentName ? `↑ ${project.parentName}` : "子项目"}</Badge>}
           </div>
           <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+            <Button size="icon" variant="ghost" className="h-6 w-6" title="打开架构图" onClick={() => onOpenArchitecture(project)}>
+              <Network className="h-3 w-3" />
+            </Button>
+            {!project.parentId && (
+              <Button size="icon" variant="ghost" className="h-6 w-6" title="新建子项目" onClick={() => onCreateChild(project)}>
+                <FolderPlus className="h-3 w-3" />
+              </Button>
+            )}
             <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => onMembers?.(project.id)}>
               <Users className="h-3 w-3" />
             </Button>
