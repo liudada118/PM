@@ -28,6 +28,7 @@ shared/      Constants and shared error helpers
 drizzle/     Database schema and migrations
 patches/     pnpm patched dependencies
 references/  Product and platform reference notes
+scripts/     Idempotent production schema checks
 .github/     GitHub Actions deployment and database import workflows
 dist/        Production build output
 ```
@@ -114,7 +115,8 @@ Authentication is currently local email login by default.
 
 ## Deployment
 
-- `.github/workflows/deploy.yml` builds the client and server bundle, uploads `dist/`, `package.json`, and `pnpm-lock.yaml` to `/opt/pm`, installs runtime dependencies, and restarts `pm2` process `pm-collab`.
+- `.github/workflows/deploy.yml` builds the client and server bundle, uploads `dist/`, package metadata, and production schema checks to `/opt/pm`, installs runtime dependencies, verifies required schema additions, and restarts `pm2` process `pm-collab`.
+- `scripts/ensure-production-schema.mjs` reads `DATABASE_URL` from `/opt/pm/.env` or the existing PM2 environment and idempotently adds the tester role and `issues.originalAssigneeId` when missing. It changes schema only and never imports or replaces business data.
 - `.github/workflows/import-db.yml` is manual-only and uploads `team-collab-hub-database.sql` to `/opt/pm` before importing it into the database referenced by `/opt/pm/.env` `DATABASE_URL`, falling back to the `pm-collab` PM2 environment. It strips the dump BOM, line comments, MariaDB/MySQL/TiDB executable comments, and dump-level `CREATE DATABASE`/`USE` statements so the server environment controls the target database. The dump contains `DROP TABLE` statements, so this workflow replaces matching production tables with the dump contents.
 - Database dumps are not imported automatically on `main`; production database imports require manually starting the GitHub Actions workflow.
 
@@ -142,6 +144,7 @@ Authentication is currently local email login by default.
 | 2026-07-14 | Bug fix | Grouped cross-status child projects under parent headings and scoped project-card collapse by status column. |
 | 2026-07-14 | Bug fix | Fixed task-board drag target detection so tasks move to the column under the cursor and show errors on failed status changes. |
 | 2026-07-21 | Bug fix | Expanded "my tasks" visibility to include assigned, authored, and original-review-owner tasks. |
+| 2026-07-21 | Configuration change | Added an idempotent production schema check before PM2 restarts without importing database dumps. |
 
 ## Project Progress
 
@@ -163,3 +166,4 @@ Authentication is currently local email login by default.
 | 2026-07-14 | Project hierarchy display | Child projects in a different status column now show their parent title and can be folded independently per column. |
 | 2026-07-14 | Task-board drag stability | Dragging tasks now resolves the destination from pointer-hit columns and reports backend status-change errors to the user. |
 | 2026-07-21 | My tasks visibility | Dashboard and task-board personal filters now show assigned tasks, authored tasks, and in-review tasks that originated from the user. |
+| 2026-07-21 | Production schema synchronization | Deployments now add required tester-review schema fields when missing while preserving all production records. |

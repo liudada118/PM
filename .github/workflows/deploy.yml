@@ -57,6 +57,8 @@ jobs:
           # package.json 和 lock 单独传，不带 --delete
           rsync -az -e "$SSH" package.json pnpm-lock.yaml \
             "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/pm/"
+          rsync -az -e "$SSH" scripts/ \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/pm/scripts/"
 
       - name: Install runtime deps & restart on server
         run: |
@@ -68,6 +70,7 @@ jobs:
             # 需要含 dev 依赖：运行时会加载 vite.config（引用了若干构建插件）。
             # install 只拉取/链接，不做重编译，不吃内存。
             pnpm install --frozen-lockfile --prod=false
+            pnpm db:ensure-production
             pm2 restart pm-collab --update-env || pm2 start dist/index.js --name pm-collab
             pm2 save
             pm2 status pm-collab
