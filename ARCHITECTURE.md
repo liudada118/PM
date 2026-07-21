@@ -64,10 +64,11 @@ flowchart LR
 ## Architecture Views and Task Creation
 
 - Each architecture document stores a `viewMode` of `mindmap` or `hybrid`; existing and unspecified documents default to `mindmap`, while hybrid mode is explicitly selected when creating or editing a document.
-- In hybrid mode, the document root and second-level headings form an ordered horizontal workflow, while the selected stage's subtree is rendered as a compact read-only mind map. Markdown remains an editing view and does not change the saved document type.
-- `client/src/pages/architectureTree.ts` parses Markdown headings and nested lists into a shared tree model while ignoring fenced code blocks; the same tree supplies workflow stages and stage-specific mind-map Markdown.
-- `client/src/pages/ArchitectureHybridView.tsx` aggregates linked issue counts and completion progress per workflow stage, preserves linked-task selection, and uses `ArchitectureMarkmap.tsx` for the detailed mind map.
-- The existing editable mind-map and Markdown modes remain available from the view switcher; narrow screens keep controls and workflow stages in their own horizontal scroll areas.
+- In hybrid mode, second-level headings form a top-to-bottom workflow on the left of one shared canvas. The active stage's subtree branches directly to the right as a compact mind map, so the overall process and selected-stage detail remain spatially connected. Markdown remains an editing view and does not change the saved document type.
+- `client/src/pages/architectureTree.ts` parses Markdown headings and nested lists into a shared tree model while ignoring fenced code blocks.
+- `client/src/pages/architectureHybridLayout.ts` assigns fixed vertical workflow positions and depth-based rightward detail positions, then emits separate downward flow edges and horizontal branch edges for currently expanded nodes.
+- `client/src/pages/ArchitectureHybridView.tsx` renders the combined graph with React Flow, aggregates linked issue completion, preserves node and flowchart actions, switches the right-hand detail branch when another workflow stage is selected, and expands or collapses nested detail branches per node.
+- The existing editable mind-map and Markdown modes remain available from the view switcher; the combined canvas supports pan, zoom, and fit-to-view on desktop and narrow screens.
 - Architecture nodes can create linked issues from `client/src/pages/Architecture.tsx`.
 - Project cards in `client/src/pages/ProjectSettings.tsx` can open the project's architecture diagram directly; parent projects with children open the merged architecture view.
 - Top-level project cards can open the create-project dialog with the selected project prefilled as the parent, allowing direct child-project creation.
@@ -153,6 +154,7 @@ Authentication is currently local email login by default.
 | 2026-07-21 | Feature | Added a hybrid business architecture view with ordered top-level workflow stages and stage-specific mind-map details. |
 | 2026-07-21 | Bug fix | Synchronized required issue columns against the active PM2 database and contained rejected architecture-task mutations in the client. |
 | 2026-07-21 | Feature | Made hybrid architecture an opt-in document type while keeping existing and unspecified documents in mind-map mode. |
+| 2026-07-21 | Feature | Joined the hybrid view on one canvas with a vertical workflow and progressively expandable right-hand mind-map details for the active stage. |
 
 ## Project Progress
 
@@ -178,3 +180,4 @@ Authentication is currently local email login by default.
 | 2026-07-21 | Hybrid business architecture | Architecture documents now combine an ordered overall workflow with compact mind-map details for the selected stage, including per-stage linked-task progress. |
 | 2026-07-21 | Active production database alignment | Schema checks now follow the database used by the running PM2 process, preventing issue creation failures when PM2 and `.env` database targets differ. |
 | 2026-07-21 | Per-document architecture mode | New and existing documents default to mind maps; users can explicitly select and persist the hybrid workflow-plus-mind-map type for individual documents. |
+| 2026-07-21 | Connected hybrid canvas | Hybrid documents now show their overall process from top to bottom and expand the selected stage's detail hierarchy directly to the right with per-node collapse, shared pan, and zoom. |
