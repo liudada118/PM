@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Dialog,
   DialogContent,
@@ -40,9 +41,12 @@ import {
   Download,
   BookOpen,
   GitMerge,
+  Workflow,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useProject } from "@/contexts/ProjectContext";
+
+type ArchitectureVisualMode = "mindmap" | "hybrid";
 
 export default function ArchitectureOverview() {
   const [, navigate] = useLocation();
@@ -55,6 +59,7 @@ export default function ArchitectureOverview() {
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newProjectId, setNewProjectId] = useState<string>("");
+  const [newViewMode, setNewViewMode] = useState<ArchitectureVisualMode>("mindmap");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterProject, setFilterProject] = useState<string>("all");
 
@@ -97,9 +102,11 @@ export default function ArchitectureOverview() {
       title: newTitle.trim(),
       content: defaultContent,
       projectId,
+      viewMode: newViewMode,
     });
     setNewTitle("");
     setNewProjectId("");
+    setNewViewMode("mindmap");
     setShowCreate(false);
     toast.success("架构文档已创建");
   };
@@ -183,6 +190,7 @@ export default function ArchitectureOverview() {
       title: "SaaS 平台架构（示例）",
       content: exampleContent,
       projectId,
+      viewMode: "mindmap",
     });
     toast.success("示例架构图已创建，点击卡片查看");
   };
@@ -414,7 +422,12 @@ export default function ArchitectureOverview() {
                       <Network className="h-5 w-5" />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="font-semibold text-base truncate">{doc.title}</h3>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <h3 className="min-w-0 flex-1 truncate text-base font-semibold">{doc.title}</h3>
+                        <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[10px] font-normal">
+                          {doc.viewMode === "hybrid" ? "组合架构" : "思维导图"}
+                        </Badge>
+                      </div>
                       {doc.projectName ? (
                         <div className="flex items-center gap-1.5 mt-1">
                           <span
@@ -525,6 +538,27 @@ export default function ArchitectureOverview() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">默认视图</label>
+              <ToggleGroup
+                type="single"
+                variant="outline"
+                value={newViewMode}
+                onValueChange={(value) => {
+                  if (value) setNewViewMode(value as ArchitectureVisualMode);
+                }}
+                className="w-full"
+              >
+                <ToggleGroupItem value="mindmap" aria-label="思维导图">
+                  <Network className="h-4 w-4" />
+                  思维导图
+                </ToggleGroupItem>
+                <ToggleGroupItem value="hybrid" aria-label="组合架构">
+                  <Workflow className="h-4 w-4" />
+                  组合架构
+                </ToggleGroupItem>
+              </ToggleGroup>
             </div>
           </div>
           <DialogFooter>

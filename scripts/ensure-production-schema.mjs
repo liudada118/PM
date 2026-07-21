@@ -101,6 +101,23 @@ export async function ensureProductionSchema() {
     } else {
       console.log("project_members.role already supports tester");
     }
+
+    const [architectureViewColumns] = await connection.query(
+      `SELECT COLUMN_NAME AS columnName
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'architecture_docs'
+       AND COLUMN_NAME = 'viewMode'`
+    );
+
+    if (architectureViewColumns.length === 0) {
+      await connection.query(
+        "ALTER TABLE `architecture_docs` ADD COLUMN `viewMode` enum('mindmap','hybrid') NOT NULL DEFAULT 'mindmap' AFTER `projectId`"
+      );
+      console.log("Added architecture_docs.viewMode");
+    } else {
+      console.log("architecture_docs.viewMode already exists");
+    }
   } finally {
     await connection.end();
   }

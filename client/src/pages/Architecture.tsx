@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { toast } from "sonner";
 import {
   Plus,
@@ -82,6 +83,9 @@ const TYPE_OPTIONS = [
 
 const LABEL_OPTIONS = ["缺陷", "功能", "技术债", "设计", "前端", "后端", "移动端", "API"];
 
+type ArchitectureVisualMode = "mindmap" | "hybrid";
+type ArchitectureViewMode = ArchitectureVisualMode | "markdown";
+
 function getDefaultFlowchart(nodeName: string): string {
   return `flowchart TD
   start["${nodeName} 开始"] --> step1["步骤1"]
@@ -101,12 +105,19 @@ export default function Architecture() {
 
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState("");
+  const [newViewMode, setNewViewMode] = useState<ArchitectureVisualMode>("mindmap");
 
   const handleCreate = async () => {
     if (!newTitle.trim()) return;
     const defaultContent = `# ${newTitle.trim()}\n\n## 模块一\n- 子模块 A\n- 子模块 B\n\n## 模块二\n- 子模块 C\n- 子模块 D\n`;
-    await createMutation.mutateAsync({ title: newTitle.trim(), content: defaultContent, projectId: currentProjectId ?? undefined });
+    await createMutation.mutateAsync({
+      title: newTitle.trim(),
+      content: defaultContent,
+      projectId: currentProjectId ?? undefined,
+      viewMode: newViewMode,
+    });
     setNewTitle("");
+    setNewViewMode("mindmap");
     setShowCreate(false);
     toast.success("架构文档已创建");
   };
@@ -171,7 +182,12 @@ export default function Architecture() {
                     <Network className="h-5 w-5" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-base">{doc.title}</h3>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-semibold text-base">{doc.title}</h3>
+                      <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal">
+                        {doc.viewMode === "hybrid" ? "组合架构" : "思维导图"}
+                      </Badge>
+                    </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       更新于 {new Date(doc.updatedAt).toLocaleDateString("zh-CN")}
                     </p>
@@ -219,6 +235,27 @@ export default function Architecture() {
               onChange={(e) => setNewTitle(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleCreate()}
             />
+            <div className="space-y-2">
+              <Label>默认视图</Label>
+              <ToggleGroup
+                type="single"
+                variant="outline"
+                value={newViewMode}
+                onValueChange={(value) => {
+                  if (value) setNewViewMode(value as ArchitectureVisualMode);
+                }}
+                className="w-full"
+              >
+                <ToggleGroupItem value="mindmap" aria-label="思维导图">
+                  <Network className="h-4 w-4" />
+                  思维导图
+                </ToggleGroupItem>
+                <ToggleGroupItem value="hybrid" aria-label="组合架构">
+                  <Workflow className="h-4 w-4" />
+                  组合架构
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreate(false)}>取消</Button>
@@ -252,7 +289,8 @@ export function ArchitectureEditor({ id }: { id: number }) {
   }, []);
 
   const markmapRef = useRef<MarkmapActions>(null);
-  const [viewMode, setViewMode] = useState<"hybrid" | "mindmap" | "markdown">("hybrid");
+  const viewModeInitializedForDoc = useRef<number | null>(null);
+  const [viewMode, setViewMode] = useState<ArchitectureViewMode>("mindmap");
   const [editContent, setEditContent] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
@@ -272,6 +310,30 @@ export function ArchitectureEditor({ id }: { id: number }) {
 
 
   const utils = trpc.useUtils();
+  const updateViewModeMutation = trpc.architecture.update.useMutation({
+    onSuccess: () => {
+      refetch();
+      utils.architecture.list.invalidate();
+      utils.architecture.listAll.invalidate();
+    },
+    onError: () => {
+      setViewMode(doc?.viewMode === "hybrid" ? "hybrid" : "mindmap");
+      toast.error("切换架构视图失败");
+    },
+  });
+
+  useEffect(() => {
+    if (!doc || viewModeInitializedForDoc.current === id) return;
+    setViewMode(doc.viewMode === "hybrid" ? "hybrid" : "mindmap");
+    viewModeInitializedForDoc.current = id;
+  }, [doc, id]);
+
+  const handleViewModeChange = (value: string) => {
+    const nextMode = value as ArchitectureViewMode;
+    setViewMode(nextMode);
+    if (nextMode === "markdown" || doc?.viewMode === nextMode) return;
+    updateViewModeMutation.mutate({ id, viewMode: nextMode });
+  };
 
   // Query versions for this doc
   const { data: versions } = trpc.architecture.listVersions.useQuery({ archDocId: id });
@@ -808,13 +870,21 @@ export function ArchitectureEditor({ id }: { id: number }) {
         </div>
         <div className="flex w-full max-w-full items-center gap-2 overflow-x-auto pb-1 sm:w-auto">
           <div className="shrink-0">
-            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "hybrid" | "mindmap" | "markdown")}>
+            <Tabs value={viewMode} onValueChange={handleViewModeChange}>
               <TabsList className="h-8 shrink-0">
-                <TabsTrigger value="hybrid" className="text-xs px-3 h-7">
+                <TabsTrigger
+                  value="hybrid"
+                  className="text-xs px-3 h-7"
+                  disabled={updateViewModeMutation.isPending}
+                >
                   <Workflow className="h-3.5 w-3.5 mr-1.5" />
-                  业务架构
+                  组合架构
                 </TabsTrigger>
-                <TabsTrigger value="mindmap" className="text-xs px-3 h-7">
+                <TabsTrigger
+                  value="mindmap"
+                  className="text-xs px-3 h-7"
+                  disabled={updateViewModeMutation.isPending}
+                >
                   <Network className="h-3.5 w-3.5 mr-1.5" />
                   思维导图
                 </TabsTrigger>

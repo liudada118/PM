@@ -1,0 +1,1 @@
+ALTER TABLE `architecture_docs` ADD `viewMode` enum('mindmap','hybrid') DEFAULT 'mindmap' NOT NULL;

@@ -217,6 +217,7 @@ export const architectureDocs = mysqlTable("architecture_docs", {
   title: varchar("title", { length: 255 }).notNull(),
   content: text("content"),
   projectId: int("projectId"),
+  viewMode: mysqlEnum("viewMode", ["mindmap", "hybrid"]).default("mindmap").notNull(),
   createdBy: int("createdBy").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

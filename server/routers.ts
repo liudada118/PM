@@ -1017,6 +1017,7 @@ export const appRouter = router({
         title: z.string().min(1),
         content: z.string().optional(),
         projectId: z.number().optional(),
+        viewMode: z.enum(["mindmap", "hybrid"]).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         return createArchitectureDoc({ ...input, createdBy: ctx.user.id });
@@ -1027,6 +1028,7 @@ export const appRouter = router({
         title: z.string().optional(),
         content: z.string().optional(),
         projectId: z.number().nullable().optional(),
+        viewMode: z.enum(["mindmap", "hybrid"]).optional(),
       }))
       .mutation(async ({ input }) => {
         const { id, ...data } = input;

@@ -984,6 +984,7 @@ export async function getArchitectureDocsOverview() {
       title: architectureDocs.title,
       content: architectureDocs.content,
       projectId: architectureDocs.projectId,
+      viewMode: architectureDocs.viewMode,
       projectName: projects.name,
       projectColor: projects.color,
       projectIcon: projects.icon,
@@ -1023,6 +1024,7 @@ export async function createArchitectureDoc(data: {
   title: string;
   content?: string;
   projectId?: number | null;
+  viewMode?: "mindmap" | "hybrid";
   createdBy: number;
 }) {
   const db = await getDb();
@@ -1031,6 +1033,7 @@ export async function createArchitectureDoc(data: {
     title: data.title,
     content: data.content ?? "",
     projectId: data.projectId ?? null,
+    viewMode: data.viewMode ?? "mindmap",
     createdBy: data.createdBy,
   });
   const insertId = (result[0] as any).insertId;
@@ -1039,7 +1042,12 @@ export async function createArchitectureDoc(data: {
 
 export async function updateArchitectureDoc(
   id: number,
-  data: { title?: string; content?: string; projectId?: number | null }
+  data: {
+    title?: string;
+    content?: string;
+    projectId?: number | null;
+    viewMode?: "mindmap" | "hybrid";
+  }
 ) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
