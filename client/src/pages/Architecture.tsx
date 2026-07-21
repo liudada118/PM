@@ -50,9 +50,11 @@ import {
   RotateCcw,
   Clock,
   Eye,
+  Workflow,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { MarkmapView, type MarkmapActions } from "./ArchitectureMarkmap";
+import { ArchitectureHybridView } from "./ArchitectureHybridView";
 import { VisualFlowEditor } from "@/components/VisualFlowEditor";
 import { useProject } from "@/contexts/ProjectContext";
 
@@ -250,7 +252,7 @@ export function ArchitectureEditor({ id }: { id: number }) {
   }, []);
 
   const markmapRef = useRef<MarkmapActions>(null);
-  const [viewMode, setViewMode] = useState<"mindmap" | "markdown">("mindmap");
+  const [viewMode, setViewMode] = useState<"hybrid" | "mindmap" | "markdown">("hybrid");
   const [editContent, setEditContent] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
@@ -647,26 +649,35 @@ export function ArchitectureEditor({ id }: { id: number }) {
       const commonDescription = buildChildTaskDescription(newTaskForm.description, selectedNode!);
       let createdCount = 0;
 
-      for (const childName of childNodeNames) {
-        const result: any = await createChildTaskMutation.mutateAsync({
-          title: childName,
-          description: commonDescription,
-          type: newTaskForm.type as "task" | "feature" | "bug",
-          status: newTaskForm.status as "Backlog" | "Todo" | "In Progress" | "In Review" | "Done",
-          priority: newTaskForm.priority as "urgent" | "high" | "medium" | "low",
-          label: newTaskForm.label || undefined,
-          assigneeId: newTaskForm.assigneeId,
-          projectId: doc?.projectId ?? currentProjectId ?? undefined,
-        });
-        const newIssueId = result?.insertId;
-        if (newIssueId) {
-          await silentLinkMutation.mutateAsync({
-            issueId: newIssueId,
-            archDocId: id,
-            nodePath: childName,
+      try {
+        for (const childName of childNodeNames) {
+          const result: any = await createChildTaskMutation.mutateAsync({
+            title: childName,
+            description: commonDescription,
+            type: newTaskForm.type as "task" | "feature" | "bug",
+            status: newTaskForm.status as "Backlog" | "Todo" | "In Progress" | "In Review" | "Done",
+            priority: newTaskForm.priority as "urgent" | "high" | "medium" | "low",
+            label: newTaskForm.label || undefined,
+            assigneeId: newTaskForm.assigneeId,
+            projectId: doc?.projectId ?? currentProjectId ?? undefined,
           });
+          const newIssueId = result?.insertId;
+          if (newIssueId) {
+            await silentLinkMutation.mutateAsync({
+              issueId: newIssueId,
+              archDocId: id,
+              nodePath: childName,
+            });
+          }
+          createdCount += 1;
         }
-        createdCount += 1;
+      } catch {
+        utils.architecture.getNodeIssues.invalidate({ archDocId: id });
+        utils.issues.list.invalidate();
+        if (createdCount > 0) {
+          toast.warning(`已创建 ${createdCount} 个子任务，其余任务创建失败`);
+        }
+        return;
       }
 
       utils.architecture.getNodeIssues.invalidate({ archDocId: id });
@@ -678,16 +689,20 @@ export function ArchitectureEditor({ id }: { id: number }) {
       return;
     }
 
-    await createTaskMutation.mutateAsync({
-      title: newTaskForm.title.trim(),
-      description: buildParentTaskDescription(newTaskForm.description, canCreateChildTasks ? childNodeNames : []),
-      type: newTaskForm.type as "task" | "feature" | "bug",
-      status: newTaskForm.status as "Backlog" | "Todo" | "In Progress" | "In Review" | "Done",
-      priority: newTaskForm.priority as "urgent" | "high" | "medium" | "low",
-      label: newTaskForm.label || undefined,
-      assigneeId: newTaskForm.assigneeId,
-      projectId: doc?.projectId ?? currentProjectId ?? undefined,
-    });
+    try {
+      await createTaskMutation.mutateAsync({
+        title: newTaskForm.title.trim(),
+        description: buildParentTaskDescription(newTaskForm.description, canCreateChildTasks ? childNodeNames : []),
+        type: newTaskForm.type as "task" | "feature" | "bug",
+        status: newTaskForm.status as "Backlog" | "Todo" | "In Progress" | "In Review" | "Done",
+        priority: newTaskForm.priority as "urgent" | "high" | "medium" | "low",
+        label: newTaskForm.label || undefined,
+        assigneeId: newTaskForm.assigneeId,
+        projectId: doc?.projectId ?? currentProjectId ?? undefined,
+      });
+    } catch {
+      // The mutation's onError callback displays the failure without leaving an unhandled promise.
+    }
   };
 
   // ─── Flowchart handlers ─────────────────────────────────────────────────
@@ -776,13 +791,13 @@ export function ArchitectureEditor({ id }: { id: number }) {
   return (
     <div className="h-[calc(100vh-2rem)] flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b bg-background/95 backdrop-blur shrink-0">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b bg-background/95 backdrop-blur shrink-0">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate("/architecture")}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <input
-            className="text-lg font-semibold bg-transparent border-none outline-none focus:ring-0 w-auto min-w-[200px]"
+            className="min-w-0 flex-1 bg-transparent text-lg font-semibold border-none outline-none focus:ring-0 sm:min-w-[200px]"
             value={title}
             onChange={(e) => handleTitleChange(e.target.value)}
             placeholder="架构文档标题"
@@ -791,22 +806,29 @@ export function ArchitectureEditor({ id }: { id: number }) {
             <Badge variant="secondary" className="text-xs">未保存</Badge>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "mindmap" | "markdown")}>
-            <TabsList className="h-8">
-              <TabsTrigger value="mindmap" className="text-xs px-3 h-7">
-                <Network className="h-3.5 w-3.5 mr-1.5" />
-                思维导图
-              </TabsTrigger>
-              <TabsTrigger value="markdown" className="text-xs px-3 h-7">
-                <FileText className="h-3.5 w-3.5 mr-1.5" />
-                Markdown
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+        <div className="flex w-full max-w-full items-center gap-2 overflow-x-auto pb-1 sm:w-auto">
+          <div className="shrink-0">
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "hybrid" | "mindmap" | "markdown")}>
+              <TabsList className="h-8 shrink-0">
+                <TabsTrigger value="hybrid" className="text-xs px-3 h-7">
+                  <Workflow className="h-3.5 w-3.5 mr-1.5" />
+                  业务架构
+                </TabsTrigger>
+                <TabsTrigger value="mindmap" className="text-xs px-3 h-7">
+                  <Network className="h-3.5 w-3.5 mr-1.5" />
+                  思维导图
+                </TabsTrigger>
+                <TabsTrigger value="markdown" className="text-xs px-3 h-7">
+                  <FileText className="h-3.5 w-3.5 mr-1.5" />
+                  Markdown
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
           <Button
             size="sm"
             variant="outline"
+            className="shrink-0"
             onClick={() => setShowVersionPanel(!showVersionPanel)}
           >
             <History className="h-3.5 w-3.5 mr-1.5" />
@@ -817,6 +839,7 @@ export function ArchitectureEditor({ id }: { id: number }) {
           </Button>
           <Button
             size="sm"
+            className="shrink-0"
             onClick={handleSave}
             disabled={!hasChanges || updateMutation.isPending}
           >
@@ -895,23 +918,34 @@ export function ArchitectureEditor({ id }: { id: number }) {
 
         {/* Main content */}
         <div className="flex-1 overflow-hidden relative flex flex-col">
-        {viewMode === "mindmap" ? (
+        {viewMode !== "markdown" ? (
           <>
           <div className="w-full relative h-full">
-            <MarkmapView
-              ref={markmapRef}
-              content={content}
-              selectedNode={selectedNode}
-              onSelectNode={setSelectedNode}
-              onContentChange={(newContent) => {
-                handleContentChange(newContent);
-              }}
-              nodeIssues={nodeIssues || []}
-              flowchartNodePaths={allFlowchartNodePaths}
-              onOpenFlowchart={(nodePath) => {
-                handleOpenFlowchart(nodePath);
-              }}
-            />
+            {viewMode === "hybrid" ? (
+              <ArchitectureHybridView
+                content={content}
+                selectedNode={selectedNode}
+                onSelectNode={setSelectedNode}
+                nodeIssues={nodeIssues || []}
+                flowchartNodePaths={allFlowchartNodePaths}
+                onOpenFlowchart={handleOpenFlowchart}
+              />
+            ) : (
+              <MarkmapView
+                ref={markmapRef}
+                content={content}
+                selectedNode={selectedNode}
+                onSelectNode={setSelectedNode}
+                onContentChange={(newContent) => {
+                  handleContentChange(newContent);
+                }}
+                nodeIssues={nodeIssues || []}
+                flowchartNodePaths={allFlowchartNodePaths}
+                onOpenFlowchart={(nodePath) => {
+                  handleOpenFlowchart(nodePath);
+                }}
+              />
+            )}
 
             {/* Node info panel - with status indicators */}
             {selectedNode && (
@@ -962,23 +996,27 @@ export function ArchitectureEditor({ id }: { id: number }) {
                     <GitBranch className="h-3 w-3 mr-1" />
                     {allFlowchartNodePaths.has(selectedNode) ? "查看流程图" : "添加流程图"}
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-[11px] px-2.5"
-                    onClick={() => nodeImageInputRef.current?.click()}
-                    disabled={isUploadingNodeImage}
-                  >
-                    <ImageIcon className="h-3 w-3 mr-1" />
-                    {isUploadingNodeImage ? "上传中..." : "插入图片"}
-                  </Button>
-                  <input
-                    ref={nodeImageInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleNodeImageUpload}
-                  />
+                  {viewMode === "mindmap" && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-[11px] px-2.5"
+                        onClick={() => nodeImageInputRef.current?.click()}
+                        disabled={isUploadingNodeImage}
+                      >
+                        <ImageIcon className="h-3 w-3 mr-1" />
+                        {isUploadingNodeImage ? "上传中..." : "插入图片"}
+                      </Button>
+                      <input
+                        ref={nodeImageInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleNodeImageUpload}
+                      />
+                    </>
+                  )}
                 </div>
 
                 {/* Linked issues with status */}

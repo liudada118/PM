@@ -261,12 +261,17 @@ export const MarkmapView = forwardRef<MarkmapActions, MarkmapViewProps>(
     useEffect(() => {
       if (!containerRef.current || mindMapRef.current) return;
       const el = containerRef.current;
+      let disposed = false;
+      let initFrameId: number | null = null;
+      let collapseTimer: ReturnType<typeof setTimeout> | null = null;
+      let fitTimer: ReturnType<typeof setTimeout> | null = null;
 
       // Wait for container to have dimensions
       const initMindMap = () => {
+        if (disposed) return;
         if (!el || el.clientWidth === 0 || el.clientHeight === 0) {
           // Retry on next frame
-          requestAnimationFrame(initMindMap);
+          initFrameId = requestAnimationFrame(initMindMap);
           return;
         }
 
@@ -358,9 +363,19 @@ export const MarkmapView = forwardRef<MarkmapActions, MarkmapViewProps>(
       setInitialized(true);
 
       // Default collapse to level 2 (show only root + second level)
-      setTimeout(() => {
-        if (mindMap && mindMap.renderer) {
+      collapseTimer = setTimeout(() => {
+        if (!disposed && mindMapRef.current === mindMap && mindMap.renderer) {
           mindMap.execCommand('UNEXPAND_TO_LEVEL', 2);
+          if (readonlyProp) {
+            fitTimer = setTimeout(() => {
+              if (disposed || mindMapRef.current !== mindMap) return;
+              try {
+                mindMap.view?.fit();
+              } catch {
+                // The SVG may still be settling after a rapid stage switch.
+              }
+            }, 150);
+          }
         }
       }, 100);
 
@@ -376,9 +391,13 @@ export const MarkmapView = forwardRef<MarkmapActions, MarkmapViewProps>(
       }; // end initMindMap
 
       // Kick off initialization
-      requestAnimationFrame(initMindMap);
+      initFrameId = requestAnimationFrame(initMindMap);
 
       return () => {
+        disposed = true;
+        if (initFrameId !== null) cancelAnimationFrame(initFrameId);
+        if (collapseTimer) clearTimeout(collapseTimer);
+        if (fitTimer) clearTimeout(fitTimer);
         if (mindMapRef.current) {
           mindMapRef.current.destroy();
           mindMapRef.current = null;
@@ -796,7 +815,7 @@ export const MarkmapView = forwardRef<MarkmapActions, MarkmapViewProps>(
         />
 
         {/* Shortcuts hint - only when node selected */}
-        {selectedNode && (
+        {selectedNode && !readonlyProp && (
           <div className="absolute top-3 left-3 text-[10px] text-muted-foreground bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-lg px-3 py-2 border shadow-sm space-y-0.5 pointer-events-none">
             <p className="font-medium text-xs text-foreground mb-1 opacity-80">快捷键</p>
             <p><kbd className="px-1 py-0.5 bg-muted rounded font-mono">Tab</kbd> 子节点 · <kbd className="px-1 py-0.5 bg-muted rounded font-mono">Enter</kbd> 兄弟节点</p>

@@ -61,8 +61,12 @@ flowchart LR
 - Drag-and-drop status changes use pointer-based column detection and explicit droppable metadata so the target status follows the column under the cursor instead of the nearest column corner.
 - Failed drag status updates roll back the optimistic board state and display the server error message.
 
-## Architecture Task Creation
+## Architecture Views and Task Creation
 
+- Architecture documents default to a hybrid business architecture view: the document root and second-level headings form an ordered horizontal workflow, while the selected stage's subtree is rendered as a compact read-only mind map.
+- `client/src/pages/architectureTree.ts` parses Markdown headings and nested lists into a shared tree model while ignoring fenced code blocks; the same tree supplies workflow stages and stage-specific mind-map Markdown.
+- `client/src/pages/ArchitectureHybridView.tsx` aggregates linked issue counts and completion progress per workflow stage, preserves linked-task selection, and uses `ArchitectureMarkmap.tsx` for the detailed mind map.
+- The existing editable mind-map and Markdown modes remain available from the view switcher; narrow screens keep controls and workflow stages in their own horizontal scroll areas.
 - Architecture nodes can create linked issues from `client/src/pages/Architecture.tsx`.
 - Project cards in `client/src/pages/ProjectSettings.tsx` can open the project's architecture diagram directly; parent projects with children open the merged architecture view.
 - Top-level project cards can open the create-project dialog with the selected project prefilled as the parent, allowing direct child-project creation.
@@ -116,7 +120,7 @@ Authentication is currently local email login by default.
 ## Deployment
 
 - `.github/workflows/deploy.yml` builds the client and server bundle, uploads `dist/`, package metadata, and production schema checks to `/opt/pm`, installs runtime dependencies, verifies required schema additions, and restarts `pm2` process `pm-collab`.
-- `scripts/ensure-production-schema.mjs` reads `DATABASE_URL` from `/opt/pm/.env` or the existing PM2 environment and idempotently adds the tester role and `issues.originalAssigneeId` when missing. It changes schema only and never imports or replaces business data.
+- `scripts/ensure-production-schema.mjs` uses the active `pm-collab` PM2 `DATABASE_URL` first and falls back to `/opt/pm/.env` before the PM2 process exists. It warns when the two targets differ and idempotently adds the tester role and `issues.originalAssigneeId` to the database the running app actually uses. It changes schema only and never imports or replaces business data.
 - `.github/workflows/import-db.yml` is manual-only and uploads `team-collab-hub-database.sql` to `/opt/pm` before importing it into the database referenced by `/opt/pm/.env` `DATABASE_URL`, falling back to the `pm-collab` PM2 environment. It strips the dump BOM, line comments, MariaDB/MySQL/TiDB executable comments, and dump-level `CREATE DATABASE`/`USE` statements so the server environment controls the target database. The dump contains `DROP TABLE` statements, so this workflow replaces matching production tables with the dump contents.
 - Database dumps are not imported automatically on `main`; production database imports require manually starting the GitHub Actions workflow.
 
@@ -145,6 +149,8 @@ Authentication is currently local email login by default.
 | 2026-07-14 | Bug fix | Fixed task-board drag target detection so tasks move to the column under the cursor and show errors on failed status changes. |
 | 2026-07-21 | Bug fix | Expanded "my tasks" visibility to include assigned, authored, and original-review-owner tasks. |
 | 2026-07-21 | Configuration change | Added an idempotent production schema check before PM2 restarts without importing database dumps. |
+| 2026-07-21 | Feature | Added a hybrid business architecture view with ordered top-level workflow stages and stage-specific mind-map details. |
+| 2026-07-21 | Bug fix | Synchronized required issue columns against the active PM2 database and contained rejected architecture-task mutations in the client. |
 
 ## Project Progress
 
@@ -167,3 +173,5 @@ Authentication is currently local email login by default.
 | 2026-07-14 | Task-board drag stability | Dragging tasks now resolves the destination from pointer-hit columns and reports backend status-change errors to the user. |
 | 2026-07-21 | My tasks visibility | Dashboard and task-board personal filters now show assigned tasks, authored tasks, and in-review tasks that originated from the user. |
 | 2026-07-21 | Production schema synchronization | Deployments now add required tester-review schema fields when missing while preserving all production records. |
+| 2026-07-21 | Hybrid business architecture | Architecture documents now combine an ordered overall workflow with compact mind-map details for the selected stage, including per-stage linked-task progress. |
+| 2026-07-21 | Active production database alignment | Schema checks now follow the database used by the running PM2 process, preventing issue creation failures when PM2 and `.env` database targets differ. |
