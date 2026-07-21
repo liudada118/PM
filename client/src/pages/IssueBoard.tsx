@@ -252,7 +252,14 @@ export default function IssueBoard() {
   const filteredIssues = useMemo(() => {
     let result = issues ?? [];
     if (filterType !== "all") result = result.filter((i) => i.type === filterType);
-    if (filterMine && user) result = result.filter((i) => i.assigneeId === user.id);
+    if (filterMine && user) {
+      result = result.filter(
+        (i) =>
+          i.assigneeId === user.id ||
+          i.authorId === user.id ||
+          (i.status === "In Review" && i.originalAssigneeId === user.id)
+      );
+    }
     return result;
   }, [issues, filterType, filterMine, user]);
 

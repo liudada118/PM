@@ -1,6 +1,6 @@
 # Team Collab Hub Architecture
 
-Last updated: 2026-07-14
+Last updated: 2026-07-21
 
 ## Project Overview
 
@@ -51,11 +51,12 @@ flowchart LR
 - Project membership roles are `owner`, `member`, and `tester`; testers are configured per project from the project members dialog.
 - When an issue moves to `In Review`, the server stores the current assignee in `issues.originalAssigneeId`, assigns the issue to the project's primary tester, and sends review notifications to project testers.
 - When an issue moves back to `In Progress` or `Todo`, the server restores `assigneeId` from `originalAssigneeId`, clears the temporary review handoff, and notifies the original assignee to continue work.
-- `issues.myTodos` continues to rely on `assigneeId`, so review handoff automatically moves the issue into the tester's task list and back to the original assignee after rejection.
+- `issues.myTodos` includes tasks assigned to the user, tasks authored by the user, and in-review tasks where the user is the original assignee, so review handoff remains visible to both testers and original owners.
 
 ## Task Board
 
 - `client/src/pages/IssueBoard.tsx` renders status columns with dnd-kit and updates issue status through `issues.update`.
+- The board's "我的任务" filter matches the dashboard todo scope: assigned, authored, or originally assigned during review.
 - Drag-and-drop status changes use pointer-based column detection and explicit droppable metadata so the target status follows the column under the cursor instead of the nearest column corner.
 - Failed drag status updates roll back the optimistic board state and display the server error message.
 
@@ -140,6 +141,7 @@ Authentication is currently local email login by default.
 | 2026-07-14 | Feature | Added project-card shortcuts for opening architecture diagrams and creating child projects from parent projects. |
 | 2026-07-14 | Bug fix | Grouped cross-status child projects under parent headings and scoped project-card collapse by status column. |
 | 2026-07-14 | Bug fix | Fixed task-board drag target detection so tasks move to the column under the cursor and show errors on failed status changes. |
+| 2026-07-21 | Bug fix | Expanded "my tasks" visibility to include assigned, authored, and original-review-owner tasks. |
 
 ## Project Progress
 
@@ -160,3 +162,4 @@ Authentication is currently local email login by default.
 | 2026-07-14 | Project management shortcuts | Project management cards now link directly to architecture diagrams and parent projects can start child-project creation in place. |
 | 2026-07-14 | Project hierarchy display | Child projects in a different status column now show their parent title and can be folded independently per column. |
 | 2026-07-14 | Task-board drag stability | Dragging tasks now resolves the destination from pointer-hit columns and reports backend status-change errors to the user. |
+| 2026-07-21 | My tasks visibility | Dashboard and task-board personal filters now show assigned tasks, authored tasks, and in-review tasks that originated from the user. |

@@ -232,13 +232,29 @@ export async function deleteWikiDoc(id: number) {
 }
 
 // ─── Issues ───────────────────────────────────────────────────────────────────
-export async function getIssues(filters?: { status?: string; type?: "bug" | "feature" | "task"; assigneeId?: number; projectId?: number | null; excludeDone?: boolean }) {
+export async function getIssues(filters?: {
+  status?: string;
+  type?: "bug" | "feature" | "task";
+  assigneeId?: number;
+  myTodoUserId?: number;
+  projectId?: number | null;
+  excludeDone?: boolean;
+}) {
   const db = await getDb();
   if (!db) return [];
   const conditions = [];
   if (filters?.status) conditions.push(eq(issues.status, filters.status as any));
   if (filters?.type) conditions.push(eq(issues.type, filters.type));
   if (filters?.assigneeId) conditions.push(eq(issues.assigneeId, filters.assigneeId));
+  if (filters?.myTodoUserId) {
+    conditions.push(
+      or(
+        eq(issues.assigneeId, filters.myTodoUserId),
+        eq(issues.authorId, filters.myTodoUserId),
+        and(eq(issues.originalAssigneeId, filters.myTodoUserId), eq(issues.status, "In Review" as any))
+      )
+    );
+  }
   if (filters?.projectId !== undefined && filters?.projectId !== null) {
     conditions.push(eq(issues.projectId, filters.projectId));
   }

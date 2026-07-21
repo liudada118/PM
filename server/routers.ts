@@ -422,7 +422,7 @@ export const appRouter = router({
       }),
 
     myTodos: protectedProcedure.query(async ({ ctx }) => {
-      const allTodos = await getIssues({ assigneeId: ctx.user.id, excludeDone: true });
+      const allTodos = await getIssues({ myTodoUserId: ctx.user.id, excludeDone: true });
       // Filter: only show todos from projects user is a member of
       // Issues without projectId are private - only visible to their creator
       const memberProjectIds = await getUserMemberProjectIds(ctx.user.id);
