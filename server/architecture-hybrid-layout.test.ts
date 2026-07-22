@@ -4,6 +4,7 @@ import {
   buildArchitectureHybridLayout,
   findContainingArchitectureStage,
   HYBRID_LAYOUT,
+  selectBusinessArchitectureStages,
 } from "../client/src/pages/architectureHybridLayout";
 import { parseArchitectureMarkdown } from "../client/src/pages/architectureTree";
 
@@ -35,6 +36,7 @@ function buildLayout(
     selectedNode: null,
     nodeIssues: [],
     flowchartNodePaths: new Set(),
+    businessStageNames: tree.children.map(stage => stage.text),
     expandedDetailNodeIds:
       expandedDetailNodeIds ??
       new Set([`detail:${tree.children[0].children[0].id}`]),
@@ -42,6 +44,17 @@ function buildLayout(
 }
 
 describe("buildArchitectureHybridLayout", () => {
+  it("uses only explicitly selected business stages", () => {
+    const tree = parseArchitectureMarkdown(content);
+
+    expect(selectBusinessArchitectureStages(tree, [])).toEqual([]);
+    expect(
+      selectBusinessArchitectureStages(tree, [tree.children[1].text]).map(
+        stage => stage.id
+      )
+    ).toEqual([tree.children[1].id]);
+  });
+
   it("lays out the main stages from top to bottom with flow edges", () => {
     const layout = buildLayout();
     const stages = layout.nodes.filter(node => node.kind === "stage");

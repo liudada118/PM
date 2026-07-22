@@ -16,4 +16,16 @@ describe("architecture document view mode", () => {
       enumValues: ["mindmap", "hybrid"],
     });
   });
+
+  it("stores an optional explicit business-stage selection", () => {
+    const businessStageNames = getTableConfig(architectureDocs).columns.find(
+      column => column.name === "businessStageNames"
+    );
+
+    expect(businessStageNames).toMatchObject({
+      notNull: false,
+      hasDefault: false,
+      dataType: "json",
+    });
+  });
 });

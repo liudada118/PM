@@ -1,0 +1,1 @@
+ALTER TABLE `architecture_docs` ADD `businessStageNames` json;

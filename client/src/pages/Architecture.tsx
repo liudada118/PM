@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { toast } from "sonner";
@@ -52,10 +53,13 @@ import {
   Clock,
   Eye,
   Workflow,
+  ListChecks,
+  Maximize2,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { MarkmapView, type MarkmapActions } from "./ArchitectureMarkmap";
 import { ArchitectureHybridView } from "./ArchitectureHybridView";
+import { parseArchitectureMarkdown } from "./architectureTree";
 import { VisualFlowEditor } from "@/components/VisualFlowEditor";
 import { useProject } from "@/contexts/ProjectContext";
 
@@ -185,7 +189,7 @@ export default function Architecture() {
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-semibold text-base">{doc.title}</h3>
                       <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal">
-                        {doc.viewMode === "hybrid" ? "组合架构" : "思维导图"}
+                        {doc.viewMode === "hybrid" ? "业务架构" : "软件架构"}
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -246,13 +250,13 @@ export default function Architecture() {
                 }}
                 className="w-full"
               >
-                <ToggleGroupItem value="mindmap" aria-label="思维导图">
+                <ToggleGroupItem value="mindmap" aria-label="软件架构">
                   <Network className="h-4 w-4" />
-                  思维导图
+                  软件架构
                 </ToggleGroupItem>
-                <ToggleGroupItem value="hybrid" aria-label="组合架构">
+                <ToggleGroupItem value="hybrid" aria-label="业务架构">
                   <Workflow className="h-4 w-4" />
-                  组合架构
+                  业务架构
                 </ToggleGroupItem>
               </ToggleGroup>
             </div>
@@ -299,6 +303,10 @@ export function ArchitectureEditor({ id }: { id: number }) {
   // Dialog states
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showBusinessStageDialog, setShowBusinessStageDialog] = useState(false);
+  const [draftBusinessStageNames, setDraftBusinessStageNames] = useState<Set<string>>(
+    () => new Set()
+  );
   const [showVersionPanel, setShowVersionPanel] = useState(false);
   const [previewVersionId, setPreviewVersionId] = useState<number | null>(null);
   const [taskCreateMode, setTaskCreateMode] = useState<"parent" | "children">("parent");
@@ -320,6 +328,18 @@ export function ArchitectureEditor({ id }: { id: number }) {
       setViewMode(doc?.viewMode === "hybrid" ? "hybrid" : "mindmap");
       toast.error("切换架构视图失败");
     },
+  });
+  const updateBusinessStagesMutation = trpc.architecture.update.useMutation({
+    onSuccess: async () => {
+      await Promise.all([
+        refetch(),
+        utils.architecture.list.invalidate(),
+        utils.architecture.listAll.invalidate(),
+      ]);
+      setShowBusinessStageDialog(false);
+      toast.success("业务阶段已更新");
+    },
+    onError: () => toast.error("保存业务阶段失败"),
   });
 
   useEffect(() => {
@@ -445,6 +465,34 @@ export function ArchitectureEditor({ id }: { id: number }) {
   // Initialize edit state when doc loads
   const content = editContent ?? doc?.content ?? "";
   const title = editTitle ?? doc?.title ?? "";
+  const availableBusinessStages = useMemo(() => {
+    const tree = parseArchitectureMarkdown(content);
+    return tree.children;
+  }, [content]);
+  const savedBusinessStageNames = useMemo(() => {
+    const names = doc?.businessStageNames;
+    return Array.isArray(names)
+      ? names.filter((name): name is string => typeof name === "string")
+      : [];
+  }, [doc?.businessStageNames]);
+  const selectedBusinessStageCount = useMemo(() => {
+    const availableNames = new Set(availableBusinessStages.map(stage => stage.text));
+    return savedBusinessStageNames.filter(name => availableNames.has(name)).length;
+  }, [availableBusinessStages, savedBusinessStageNames]);
+  const openBusinessStageDialog = () => {
+    const availableNames = new Set(availableBusinessStages.map(stage => stage.text));
+    setDraftBusinessStageNames(
+      new Set(savedBusinessStageNames.filter(name => availableNames.has(name)))
+    );
+    setShowBusinessStageDialog(true);
+  };
+
+  const saveBusinessStages = () => {
+    const businessStageNames = availableBusinessStages
+      .map(stage => stage.text)
+      .filter(name => draftBusinessStageNames.has(name));
+    updateBusinessStagesMutation.mutate({ id, businessStageNames });
+  };
 
   // Extract inline mermaid blocks from content to identify nodes with embedded flowcharts
   const inlineMermaidNodes = useMemo(() => {
@@ -873,20 +921,20 @@ export function ArchitectureEditor({ id }: { id: number }) {
             <Tabs value={viewMode} onValueChange={handleViewModeChange}>
               <TabsList className="h-8 shrink-0">
                 <TabsTrigger
-                  value="hybrid"
-                  className="text-xs px-3 h-7"
-                  disabled={updateViewModeMutation.isPending}
-                >
-                  <Workflow className="h-3.5 w-3.5 mr-1.5" />
-                  组合架构
-                </TabsTrigger>
-                <TabsTrigger
                   value="mindmap"
                   className="text-xs px-3 h-7"
                   disabled={updateViewModeMutation.isPending}
                 >
                   <Network className="h-3.5 w-3.5 mr-1.5" />
-                  思维导图
+                  软件架构
+                </TabsTrigger>
+                <TabsTrigger
+                  value="hybrid"
+                  className="text-xs px-3 h-7"
+                  disabled={updateViewModeMutation.isPending}
+                >
+                  <Workflow className="h-3.5 w-3.5 mr-1.5" />
+                  业务架构
                 </TabsTrigger>
                 <TabsTrigger value="markdown" className="text-xs px-3 h-7">
                   <FileText className="h-3.5 w-3.5 mr-1.5" />
@@ -895,6 +943,32 @@ export function ArchitectureEditor({ id }: { id: number }) {
               </TabsList>
             </Tabs>
           </div>
+          {viewMode === "mindmap" && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0"
+              onClick={() => markmapRef.current?.overview()}
+              title="展开全部节点并适应画布"
+            >
+              <Maximize2 className="h-3.5 w-3.5 mr-1.5" />
+              全览
+            </Button>
+          )}
+          {viewMode === "hybrid" && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0"
+              onClick={openBusinessStageDialog}
+            >
+              <ListChecks className="h-3.5 w-3.5 mr-1.5" />
+              业务阶段
+              <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
+                {selectedBusinessStageCount}
+              </Badge>
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"
@@ -997,6 +1071,7 @@ export function ArchitectureEditor({ id }: { id: number }) {
                 selectedNode={selectedNode}
                 onSelectNode={setSelectedNode}
                 nodeIssues={nodeIssues || []}
+                businessStageNames={savedBusinessStageNames}
                 flowchartNodePaths={allFlowchartNodePaths}
                 onOpenFlowchart={handleOpenFlowchart}
               />
@@ -1471,6 +1546,89 @@ export function ArchitectureEditor({ id }: { id: number }) {
         )}
         </div>
       </div>
+
+      <Dialog open={showBusinessStageDialog} onOpenChange={setShowBusinessStageDialog}>
+        <DialogContent className="w-[calc(100%-1rem)] max-w-[520px] overflow-hidden p-0 sm:w-full sm:max-w-[520px]">
+          <DialogHeader className="px-6 pt-6">
+            <DialogTitle>业务阶段</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center justify-between gap-3 px-6 text-sm text-muted-foreground">
+            <span>已选择 {draftBusinessStageNames.size} 个二级模块</span>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() =>
+                  setDraftBusinessStageNames(
+                    new Set(availableBusinessStages.map(stage => stage.text))
+                  )
+                }
+                disabled={availableBusinessStages.length === 0}
+              >
+                全选
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => setDraftBusinessStageNames(new Set())}
+                disabled={draftBusinessStageNames.size === 0}
+              >
+                清空
+              </Button>
+            </div>
+          </div>
+          <div className="max-h-[55vh] overflow-y-auto border-y">
+            {availableBusinessStages.length === 0 ? (
+              <p className="px-6 py-10 text-center text-sm text-muted-foreground">
+                当前软件架构没有二级模块
+              </p>
+            ) : (
+              availableBusinessStages.map((stage, index) => (
+                <label
+                  key={stage.id}
+                  className="flex cursor-pointer items-center gap-3 border-b px-6 py-3 last:border-b-0 hover:bg-muted/40"
+                >
+                  <Checkbox
+                    checked={draftBusinessStageNames.has(stage.text)}
+                    onCheckedChange={checked => {
+                      setDraftBusinessStageNames(previous => {
+                        const next = new Set(previous);
+                        if (checked === true) next.add(stage.text);
+                        else next.delete(stage.text);
+                        return next;
+                      });
+                    }}
+                  />
+                  <span className="w-7 shrink-0 text-xs tabular-nums text-muted-foreground">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                    {stage.text}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {stage.children.length} 个分支
+                  </span>
+                </label>
+              ))
+            )}
+          </div>
+          <DialogFooter className="px-6 pb-6">
+            <Button variant="outline" onClick={() => setShowBusinessStageDialog(false)}>
+              取消
+            </Button>
+            <Button
+              onClick={saveBusinessStages}
+              disabled={updateBusinessStagesMutation.isPending}
+            >
+              {updateBusinessStagesMutation.isPending ? "保存中..." : "保存阶段"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

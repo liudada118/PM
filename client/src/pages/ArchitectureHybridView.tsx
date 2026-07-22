@@ -28,6 +28,7 @@ import { parseArchitectureMarkdown } from "./architectureTree";
 import {
   buildArchitectureHybridLayout,
   findContainingArchitectureStage,
+  selectBusinessArchitectureStages,
   type ArchitectureNodeIssue,
 } from "./architectureHybridLayout";
 
@@ -36,6 +37,7 @@ interface ArchitectureHybridViewProps {
   selectedNode: string | null;
   onSelectNode: (nodePath: string | null) => void;
   nodeIssues: ArchitectureNodeIssue[];
+  businessStageNames: string[];
   flowchartNodePaths?: Set<string>;
   onOpenFlowchart?: (nodePath: string) => void;
 }
@@ -182,13 +184,14 @@ export function ArchitectureHybridView({
   selectedNode,
   onSelectNode,
   nodeIssues,
+  businessStageNames,
   flowchartNodePaths,
   onOpenFlowchart,
 }: ArchitectureHybridViewProps) {
   const tree = useMemo(() => parseArchitectureMarkdown(content), [content]);
   const stages = useMemo(
-    () => (tree.children.length > 0 ? tree.children : [tree]),
-    [tree]
+    () => selectBusinessArchitectureStages(tree, businessStageNames),
+    [businessStageNames, tree]
   );
   const [activeStageId, setActiveStageId] = useState(stages[0]?.id ?? "");
   const [expandedDetailNodeIds, setExpandedDetailNodeIds] = useState<
@@ -221,10 +224,12 @@ export function ArchitectureHybridView({
         selectedNode,
         nodeIssues,
         flowchartNodePaths: flowchartNodePaths ?? new Set<string>(),
+        businessStageNames,
         expandedDetailNodeIds,
       }),
     [
       activeStageId,
+      businessStageNames,
       expandedDetailNodeIds,
       flowchartNodePaths,
       nodeIssues,
@@ -313,7 +318,7 @@ export function ArchitectureHybridView({
   if (!layout.activeStage) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        暂无业务架构
+        未配置业务阶段
       </div>
     );
   }

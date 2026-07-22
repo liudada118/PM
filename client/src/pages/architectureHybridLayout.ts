@@ -59,6 +59,15 @@ export const HYBRID_LAYOUT = {
   detailGapY: 18,
 } as const;
 
+export function selectBusinessArchitectureStages(
+  tree: ArchitectureTreeNode,
+  businessStageNames: string[]
+): ArchitectureTreeNode[] {
+  const candidates = tree.children.length > 0 ? tree.children : [tree];
+  const selectedNames = new Set(businessStageNames);
+  return candidates.filter(stage => selectedNames.has(stage.text));
+}
+
 export function findContainingArchitectureStage(
   stages: ArchitectureTreeNode[],
   selectedNode: string | null,
@@ -95,6 +104,7 @@ export function buildArchitectureHybridLayout({
   selectedNode,
   nodeIssues,
   flowchartNodePaths,
+  businessStageNames = [],
   expandedDetailNodeIds = new Set<string>(),
 }: {
   tree: ArchitectureTreeNode;
@@ -102,9 +112,10 @@ export function buildArchitectureHybridLayout({
   selectedNode: string | null;
   nodeIssues: ArchitectureNodeIssue[];
   flowchartNodePaths: Set<string>;
+  businessStageNames?: string[];
   expandedDetailNodeIds?: Set<string>;
 }): ArchitectureHybridLayout {
-  const stages = tree.children.length > 0 ? tree.children : [tree];
+  const stages = selectBusinessArchitectureStages(tree, businessStageNames);
   const activeStage =
     stages.find(stage => stage.id === activeStageId) ?? stages[0] ?? null;
   const nodes: ArchitectureHybridLayoutNode[] = [];

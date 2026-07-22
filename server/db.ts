@@ -985,6 +985,7 @@ export async function getArchitectureDocsOverview() {
       content: architectureDocs.content,
       projectId: architectureDocs.projectId,
       viewMode: architectureDocs.viewMode,
+      businessStageNames: architectureDocs.businessStageNames,
       projectName: projects.name,
       projectColor: projects.color,
       projectIcon: projects.icon,
@@ -1025,6 +1026,7 @@ export async function createArchitectureDoc(data: {
   content?: string;
   projectId?: number | null;
   viewMode?: "mindmap" | "hybrid";
+  businessStageNames?: string[];
   createdBy: number;
 }) {
   const db = await getDb();
@@ -1034,6 +1036,7 @@ export async function createArchitectureDoc(data: {
     content: data.content ?? "",
     projectId: data.projectId ?? null,
     viewMode: data.viewMode ?? "mindmap",
+    businessStageNames: data.businessStageNames ?? [],
     createdBy: data.createdBy,
   });
   const insertId = (result[0] as any).insertId;
@@ -1047,6 +1050,7 @@ export async function updateArchitectureDoc(
     content?: string;
     projectId?: number | null;
     viewMode?: "mindmap" | "hybrid";
+    businessStageNames?: string[];
   }
 ) {
   const db = await getDb();

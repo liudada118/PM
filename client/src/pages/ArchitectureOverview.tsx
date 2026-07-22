@@ -425,7 +425,7 @@ export default function ArchitectureOverview() {
                       <div className="flex min-w-0 items-center gap-2">
                         <h3 className="min-w-0 flex-1 truncate text-base font-semibold">{doc.title}</h3>
                         <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[10px] font-normal">
-                          {doc.viewMode === "hybrid" ? "组合架构" : "思维导图"}
+                          {doc.viewMode === "hybrid" ? "业务架构" : "软件架构"}
                         </Badge>
                       </div>
                       {doc.projectName ? (
@@ -550,13 +550,13 @@ export default function ArchitectureOverview() {
                 }}
                 className="w-full"
               >
-                <ToggleGroupItem value="mindmap" aria-label="思维导图">
+                <ToggleGroupItem value="mindmap" aria-label="软件架构">
                   <Network className="h-4 w-4" />
-                  思维导图
+                  软件架构
                 </ToggleGroupItem>
-                <ToggleGroupItem value="hybrid" aria-label="组合架构">
+                <ToggleGroupItem value="hybrid" aria-label="业务架构">
                   <Workflow className="h-4 w-4" />
-                  组合架构
+                  业务架构
                 </ToggleGroupItem>
               </ToggleGroup>
             </div>

@@ -7,6 +7,7 @@ import {
   varchar,
   float,
   boolean,
+  json,
 } from "drizzle-orm/mysql-core";
 
 // ─── Users ───────────────────────────────────────────────────────────────────
@@ -218,6 +219,7 @@ export const architectureDocs = mysqlTable("architecture_docs", {
   content: text("content"),
   projectId: int("projectId"),
   viewMode: mysqlEnum("viewMode", ["mindmap", "hybrid"]).default("mindmap").notNull(),
+  businessStageNames: json("businessStageNames").$type<string[]>(),
   createdBy: int("createdBy").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

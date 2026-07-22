@@ -1018,6 +1018,7 @@ export const appRouter = router({
         content: z.string().optional(),
         projectId: z.number().optional(),
         viewMode: z.enum(["mindmap", "hybrid"]).optional(),
+        businessStageNames: z.array(z.string().min(1)).max(100).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         return createArchitectureDoc({ ...input, createdBy: ctx.user.id });
@@ -1029,6 +1030,7 @@ export const appRouter = router({
         content: z.string().optional(),
         projectId: z.number().nullable().optional(),
         viewMode: z.enum(["mindmap", "hybrid"]).optional(),
+        businessStageNames: z.array(z.string().min(1)).max(100).optional(),
       }))
       .mutation(async ({ input }) => {
         const { id, ...data } = input;

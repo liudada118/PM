@@ -205,6 +205,7 @@ interface NodeIssue {
 
 export interface MarkmapActions {
   undo: () => void;
+  overview: () => void;
   setNodeImage: (url: string, title: string, width: number, height: number) => void;
 }
 
@@ -239,6 +240,12 @@ export const MarkmapView = forwardRef<MarkmapActions, MarkmapViewProps>(
           mindMapRef.current.execCommand("BACK");
           toast.info("已撤回");
         }
+      },
+      overview: () => {
+        const mindMap = mindMapRef.current;
+        if (!mindMap) return;
+        mindMap.execCommand("EXPAND_ALL");
+        setTimeout(() => mindMap.view?.fit(), 300);
       },
       setNodeImage: (url: string, title: string, width: number, height: number) => {
         if (!mindMapRef.current) return;
@@ -849,7 +856,7 @@ export const MarkmapView = forwardRef<MarkmapActions, MarkmapViewProps>(
         </div>
 
         {/* Zoom & expand/collapse controls */}
-        <div className="absolute bottom-4 right-4 flex flex-col gap-1">
+        <div className="absolute bottom-4 left-4 flex flex-col gap-1">
           <button
             className="w-7 h-7 rounded-md bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border shadow-sm flex items-center justify-center text-xs hover:bg-blue-50 transition-colors"
             onClick={handleExpandAll}

@@ -118,6 +118,23 @@ export async function ensureProductionSchema() {
     } else {
       console.log("architecture_docs.viewMode already exists");
     }
+
+    const [businessStageColumns] = await connection.query(
+      `SELECT COLUMN_NAME AS columnName
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'architecture_docs'
+       AND COLUMN_NAME = 'businessStageNames'`
+    );
+
+    if (businessStageColumns.length === 0) {
+      await connection.query(
+        "ALTER TABLE `architecture_docs` ADD COLUMN `businessStageNames` json NULL AFTER `viewMode`"
+      );
+      console.log("Added architecture_docs.businessStageNames");
+    } else {
+      console.log("architecture_docs.businessStageNames already exists");
+    }
   } finally {
     await connection.end();
   }
