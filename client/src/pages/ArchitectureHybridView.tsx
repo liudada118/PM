@@ -17,6 +17,7 @@ import "@xyflow/react/dist/style.css";
 import {
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   CircleDot,
   GitBranch,
@@ -56,8 +57,10 @@ interface HybridNodeData extends Record<string, unknown> {
   active: boolean;
   selected: boolean;
   nodeId: string;
+  stageDetailsCollapsed: boolean;
   onOpenFlowchart?: (nodePath: string) => void;
   onToggleExpanded?: (nodeId: string) => void;
+  onToggleStageDetails?: (nodeId: string) => void;
 }
 
 type HybridFlowNode = Node<HybridNodeData, "architectureHybrid">;
@@ -130,6 +133,32 @@ function HybridArchitectureNode({ data }: NodeProps<HybridFlowNode>) {
         position={Position.Right}
         className="!h-2 !w-2 !border-0 !bg-transparent !opacity-0"
       />
+      {isStage &&
+        data.active &&
+        data.childCount > 0 &&
+        data.onToggleStageDetails && (
+          <button
+            type="button"
+            className="nodrag nopan absolute -right-4 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-colors hover:border-primary/50 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            title={
+              data.stageDetailsCollapsed
+                ? "展开阶段全部详情"
+                : "折叠阶段全部详情"
+            }
+            aria-label={`${data.stageDetailsCollapsed ? "展开" : "折叠"} ${data.label} 的全部详情分支`}
+            aria-expanded={!data.stageDetailsCollapsed}
+            onClick={event => {
+              event.stopPropagation();
+              data.onToggleStageDetails?.(data.nodeId);
+            }}
+          >
+            {data.stageDetailsCollapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <ChevronLeft className="h-4 w-4" />
+            )}
+          </button>
+        )}
 
       {isStage && (
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-current/25 bg-background/80 text-xs font-semibold">
@@ -197,6 +226,9 @@ export function ArchitectureHybridView({
   const [expandedDetailNodeIds, setExpandedDetailNodeIds] = useState<
     Set<string>
   >(() => new Set());
+  const [collapsedStageNodeIds, setCollapsedStageNodeIds] = useState<
+    Set<string>
+  >(() => new Set());
 
   useEffect(() => {
     if (!stages.some(stage => stage.id === activeStageId)) {
@@ -226,10 +258,12 @@ export function ArchitectureHybridView({
         flowchartNodePaths: flowchartNodePaths ?? new Set<string>(),
         businessStageNames,
         expandedDetailNodeIds,
+        collapsedStageNodeIds,
       }),
     [
       activeStageId,
       businessStageNames,
+      collapsedStageNodeIds,
       expandedDetailNodeIds,
       flowchartNodePaths,
       nodeIssues,
@@ -240,6 +274,15 @@ export function ArchitectureHybridView({
 
   const handleToggleExpanded = useCallback((nodeId: string) => {
     setExpandedDetailNodeIds(previous => {
+      const next = new Set(previous);
+      if (next.has(nodeId)) next.delete(nodeId);
+      else next.add(nodeId);
+      return next;
+    });
+  }, []);
+
+  const handleToggleStageDetails = useCallback((nodeId: string) => {
+    setCollapsedStageNodeIds(previous => {
       const next = new Set(previous);
       if (next.has(nodeId)) next.delete(nodeId);
       else next.add(nodeId);
@@ -274,11 +317,19 @@ export function ArchitectureHybridView({
           active: node.active,
           selected: node.selected,
           nodeId: node.id,
+          stageDetailsCollapsed: collapsedStageNodeIds.has(node.id),
           onOpenFlowchart,
           onToggleExpanded: handleToggleExpanded,
+          onToggleStageDetails: handleToggleStageDetails,
         },
       })),
-    [handleToggleExpanded, layout.nodes, onOpenFlowchart]
+    [
+      collapsedStageNodeIds,
+      handleToggleExpanded,
+      handleToggleStageDetails,
+      layout.nodes,
+      onOpenFlowchart,
+    ]
   );
 
   const edges = useMemo<Edge[]>(
@@ -330,7 +381,7 @@ export function ArchitectureHybridView({
           expandedDetailNodeIds
         )
           .sort()
-          .join(",")}`}
+          .join(",")}:${Array.from(collapsedStageNodeIds).sort().join(",")}`}
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}

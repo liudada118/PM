@@ -27,7 +27,8 @@ const content = `# 订单交付
 
 function buildLayout(
   activeStageId?: string,
-  expandedDetailNodeIds?: Set<string>
+  expandedDetailNodeIds?: Set<string>,
+  collapsedStageNodeIds?: Set<string>
 ) {
   const tree = parseArchitectureMarkdown(content);
   return buildArchitectureHybridLayout({
@@ -40,6 +41,7 @@ function buildLayout(
     expandedDetailNodeIds:
       expandedDetailNodeIds ??
       new Set([`detail:${tree.children[0].children[0].id}`]),
+    collapsedStageNodeIds,
   });
 }
 
@@ -132,6 +134,33 @@ describe("buildArchitectureHybridLayout", () => {
 
     expect(collapsed.nodes.map(node => node.label)).not.toContain("业务访谈");
     expect(expanded.nodes.map(node => node.label)).toContain("业务访谈");
+  });
+
+  it("collapses all active-stage details without losing nested expansion", () => {
+    const tree = parseArchitectureMarkdown(content);
+    const expandedDetailNodeIds = new Set([
+      `detail:${tree.children[0].children[0].id}`,
+    ]);
+    const collapsed = buildLayout(
+      undefined,
+      expandedDetailNodeIds,
+      new Set([`stage:${tree.children[0].id}`])
+    );
+    const restored = buildLayout(undefined, expandedDetailNodeIds);
+
+    expect(collapsed.nodes.filter(node => node.kind === "stage")).toHaveLength(
+      2
+    );
+    expect(collapsed.nodes.filter(node => node.kind === "detail")).toHaveLength(
+      0
+    );
+    expect(collapsed.edges.filter(edge => edge.kind === "branch")).toHaveLength(
+      0
+    );
+    expect(collapsed.edges.filter(edge => edge.kind === "flow")).toHaveLength(
+      1
+    );
+    expect(restored.nodes.map(node => node.label)).toContain("业务访谈");
   });
 
   it("keeps the preferred stage when a detail repeats another stage name", () => {

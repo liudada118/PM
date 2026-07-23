@@ -106,6 +106,7 @@ export function buildArchitectureHybridLayout({
   flowchartNodePaths,
   businessStageNames = [],
   expandedDetailNodeIds = new Set<string>(),
+  collapsedStageNodeIds = new Set<string>(),
 }: {
   tree: ArchitectureTreeNode;
   activeStageId: string;
@@ -114,6 +115,7 @@ export function buildArchitectureHybridLayout({
   flowchartNodePaths: Set<string>;
   businessStageNames?: string[];
   expandedDetailNodeIds?: Set<string>;
+  collapsedStageNodeIds?: Set<string>;
 }): ArchitectureHybridLayout {
   const stages = selectBusinessArchitectureStages(tree, businessStageNames);
   const activeStage =
@@ -157,7 +159,11 @@ export function buildArchitectureHybridLayout({
     }
   });
 
-  if (!activeStage || activeStage.children.length === 0) {
+  if (
+    !activeStage ||
+    activeStage.children.length === 0 ||
+    collapsedStageNodeIds.has(`stage:${activeStage.id}`)
+  ) {
     return { nodes, edges, stages, activeStage };
   }
 
