@@ -69,7 +69,7 @@ flowchart LR
 - In business architecture, the active stage's subtree branches directly to the right as a compact mind map, so the overall process and selected-stage detail remain spatially connected. Markdown remains an editing view and does not change the saved document type.
 - `client/src/pages/architectureTree.ts` parses Markdown headings and nested lists into a shared tree model while ignoring fenced code blocks.
 - `client/src/pages/architectureHybridLayout.ts` assigns fixed vertical workflow positions and depth-based rightward detail positions, then emits separate downward flow edges and horizontal branch edges for currently expanded nodes. A collapsed active stage omits its whole detail branch while retaining the complete workflow.
-- `client/src/pages/ArchitectureHybridView.tsx` renders the combined graph with React Flow, aggregates linked issue completion, preserves node and flowchart actions, switches the right-hand detail branch when another workflow stage is selected, and supports both per-node detail folding and a stage-level master toggle at the workflow/detail junction. Stage-level folding preserves the nested expansion state for restoration.
+- `client/src/pages/ArchitectureHybridView.tsx` renders the combined graph with React Flow, aggregates linked issue completion, preserves node and flowchart actions, switches the right-hand detail branch when another workflow stage is selected, and supports per-node folding, a stage-level master toggle at the workflow/detail junction, and active-stage expand-all/collapse-all controls in the canvas toolbar. Stage-level folding preserves nested state, while collapse-all returns the visible stage to its first-level details.
 - The editable software-architecture and Markdown modes remain available from the view switcher; the combined canvas supports pan, zoom, and fit-to-view on desktop and narrow screens.
 - Architecture nodes can create linked issues from `client/src/pages/Architecture.tsx`.
 - Project cards in `client/src/pages/ProjectSettings.tsx` can open the project's architecture diagram directly; parent projects with children open the merged architecture view.
@@ -159,6 +159,7 @@ Authentication is currently local email login by default.
 | 2026-07-21 | Feature | Joined the hybrid view on one canvas with a vertical workflow and progressively expandable right-hand mind-map details for the active stage. |
 | 2026-07-22 | Feature | Added software-architecture full overview and explicit per-document business-stage selection so unrelated modules are excluded from business flows. |
 | 2026-07-23 | Feature | Added a stage-level collapse control for hiding and restoring all right-hand business-architecture details without losing nested expansion state. |
+| 2026-07-23 | Feature | Added business-architecture expand-all and collapse-all canvas controls for recursively opening or compacting the active stage details. |
 
 ## Project Progress
 
@@ -187,3 +188,4 @@ Authentication is currently local email login by default.
 | 2026-07-21 | Connected hybrid canvas | Hybrid documents now show their overall process from top to bottom and expand the selected stage's detail hierarchy directly to the right with per-node collapse, shared pan, and zoom. |
 | 2026-07-22 | Selective business architecture | Software architecture can expand and fit the entire map, while each document independently selects which second-level modules participate in its business workflow. |
 | 2026-07-23 | Business detail master folding | The active workflow stage can collapse or restore its entire right-hand detail tree from the connection point while retaining individual node expansion state. |
+| 2026-07-23 | Business detail bulk controls | The business canvas toolbar can recursively expand the active stage or collapse it back to first-level details, with fit-to-view supporting large expanded trees. |

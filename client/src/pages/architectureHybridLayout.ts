@@ -85,6 +85,22 @@ export function findContainingArchitectureStage(
   );
 }
 
+export function collectExpandableDetailNodeIds(
+  stage: ArchitectureTreeNode | null
+): Set<string> {
+  const nodeIds = new Set<string>();
+
+  function walk(node: ArchitectureTreeNode) {
+    if (node.children.length > 0) {
+      nodeIds.add(`detail:${node.id}`);
+    }
+    node.children.forEach(walk);
+  }
+
+  stage?.children.forEach(walk);
+  return nodeIds;
+}
+
 function getIssueProgress(
   node: ArchitectureTreeNode,
   issues: ArchitectureNodeIssue[]

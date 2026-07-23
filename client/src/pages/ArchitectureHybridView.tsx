@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Background,
   BackgroundVariant,
+  ControlButton,
   Controls,
   Handle,
   MarkerType,
@@ -19,6 +20,8 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
   CircleDot,
   GitBranch,
   Network,
@@ -28,6 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { parseArchitectureMarkdown } from "./architectureTree";
 import {
   buildArchitectureHybridLayout,
+  collectExpandableDetailNodeIds,
   findContainingArchitectureStage,
   selectBusinessArchitectureStages,
   type ArchitectureNodeIssue,
@@ -272,6 +276,24 @@ export function ArchitectureHybridView({
     ]
   );
 
+  const activeStageNodeId = layout.activeStage
+    ? `stage:${layout.activeStage.id}`
+    : "";
+  const expandableDetailNodeIds = useMemo(
+    () => collectExpandableDetailNodeIds(layout.activeStage),
+    [layout.activeStage]
+  );
+
+  const showActiveStageDetails = useCallback(() => {
+    if (!activeStageNodeId) return;
+    setCollapsedStageNodeIds(previous => {
+      if (!previous.has(activeStageNodeId)) return previous;
+      const next = new Set(previous);
+      next.delete(activeStageNodeId);
+      return next;
+    });
+  }, [activeStageNodeId]);
+
   const handleToggleExpanded = useCallback((nodeId: string) => {
     setExpandedDetailNodeIds(previous => {
       const next = new Set(previous);
@@ -289,6 +311,33 @@ export function ArchitectureHybridView({
       return next;
     });
   }, []);
+
+  const handleExpandAllDetails = useCallback(() => {
+    setExpandedDetailNodeIds(previous => {
+      const next = new Set(previous);
+      let changed = false;
+      expandableDetailNodeIds.forEach(nodeId => {
+        if (!next.has(nodeId)) {
+          next.add(nodeId);
+          changed = true;
+        }
+      });
+      return changed ? next : previous;
+    });
+    showActiveStageDetails();
+  }, [expandableDetailNodeIds, showActiveStageDetails]);
+
+  const handleCollapseAllDetails = useCallback(() => {
+    setExpandedDetailNodeIds(previous => {
+      const next = new Set(previous);
+      let changed = false;
+      expandableDetailNodeIds.forEach(nodeId => {
+        if (next.delete(nodeId)) changed = true;
+      });
+      return changed ? next : previous;
+    });
+    showActiveStageDetails();
+  }, [expandableDetailNodeIds, showActiveStageDetails]);
 
   const nodes = useMemo<HybridFlowNode[]>(
     () =>
@@ -387,7 +436,7 @@ export function ArchitectureHybridView({
         nodeTypes={nodeTypes}
         fitView
         fitViewOptions={{ padding: 0.12, maxZoom: 1.15 }}
-        minZoom={0.2}
+        minZoom={0.05}
         maxZoom={2}
         nodesDraggable={false}
         nodesConnectable={false}
@@ -415,7 +464,26 @@ export function ArchitectureHybridView({
           size={1}
           color="#cbd5e1"
         />
-        <Controls position="bottom-left" showInteractive={false} />
+        <Controls position="bottom-left" showInteractive={false}>
+          <ControlButton
+            type="button"
+            onClick={handleExpandAllDetails}
+            disabled={layout.activeStage.children.length === 0}
+            title="全部展开当前阶段详情"
+            aria-label="全部展开当前阶段详情"
+          >
+            <ChevronsUpDown className="h-4 w-4" />
+          </ControlButton>
+          <ControlButton
+            type="button"
+            onClick={handleCollapseAllDetails}
+            disabled={layout.activeStage.children.length === 0}
+            title="全部折叠当前阶段详情"
+            aria-label="全部折叠当前阶段详情"
+          >
+            <ChevronsDownUp className="h-4 w-4" />
+          </ControlButton>
+        </Controls>
         <Panel position="top-left" className="m-4">
           <div className="flex items-center gap-2 border-b border-border/70 bg-background/90 px-1 pb-2 text-sm backdrop-blur-sm">
             <CircleDot className="h-4 w-4 text-primary" />

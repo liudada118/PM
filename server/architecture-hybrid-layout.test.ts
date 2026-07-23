@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildArchitectureHybridLayout,
+  collectExpandableDetailNodeIds,
   findContainingArchitectureStage,
   HYBRID_LAYOUT,
   selectBusinessArchitectureStages,
@@ -134,6 +135,31 @@ describe("buildArchitectureHybridLayout", () => {
 
     expect(collapsed.nodes.map(node => node.label)).not.toContain("业务访谈");
     expect(expanded.nodes.map(node => node.label)).toContain("业务访谈");
+  });
+
+  it("collects every expandable detail for the active-stage controls", () => {
+    const tree = parseArchitectureMarkdown(
+      `# 业务流程\n\n## 当前阶段\n\n### 一级详情\n\n#### 二级详情\n\n##### 末级详情\n\n### 一级叶子\n`
+    );
+    const stage = tree.children[0];
+    const expandableNodeIds = collectExpandableDetailNodeIds(stage);
+    const layout = buildArchitectureHybridLayout({
+      tree,
+      activeStageId: stage.id,
+      selectedNode: null,
+      nodeIssues: [],
+      flowchartNodePaths: new Set(),
+      businessStageNames: [stage.text],
+      expandedDetailNodeIds: expandableNodeIds,
+    });
+
+    expect(expandableNodeIds).toEqual(
+      new Set([
+        `detail:${stage.children[0].id}`,
+        `detail:${stage.children[0].children[0].id}`,
+      ])
+    );
+    expect(layout.nodes.map(node => node.label)).toContain("末级详情");
   });
 
   it("collapses all active-stage details without losing nested expansion", () => {
