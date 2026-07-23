@@ -66,6 +66,7 @@ flowchart LR
 
 - Each architecture document stores a `viewMode` of `mindmap` or `hybrid`; the UI presents these as software architecture and business architecture. Existing and unspecified documents default to software architecture, while business architecture is explicitly selected when creating or editing a document.
 - Software architecture keeps the complete editable mind map and exposes a full-overview action that expands every node before fitting the whole structure into the visible canvas.
+- `client/src/pages/ArchitectureMarkmap.tsx` renders embedded Mermaid blocks as child preview nodes. `client/src/pages/flowchartPreview.ts` reads each rendered SVG's intrinsic dimensions, preserves its aspect ratio inside bounded preview dimensions, and removes Mermaid's responsive width cap so the diagram, preview card, and surrounding mind map scale together.
 - Business architecture stores an optional `businessStageNames` JSON list. Only explicitly selected second-level headings form the top-to-bottom workflow on the left of the shared canvas; unrelated software modules remain available in software architecture without being forced into the business flow.
 - In business architecture, the active stage's subtree branches directly to the right as a compact mind map, so the overall process and selected-stage detail remain spatially connected. Markdown remains an editing view and does not change the saved document type.
 - `client/src/pages/architectureTree.ts` parses Markdown headings and nested lists into a shared tree model while ignoring fenced code blocks.
@@ -166,6 +167,7 @@ Authentication is currently local email login by default.
 | 2026-07-23 | Feature | Reworked architecture version history into read-only previews that can seed a new sequential version without overwriting historical snapshots. |
 | 2026-07-23 | Bug fix | Rebuilt the task-board drag overlay as a full-card body portal and placed it directly below the pointer to remove page-transform offsets without obscuring content. |
 | 2026-07-23 | Bug fix | Made business-architecture detail cards and subtree spacing respond to wrapped label height so long technical text cannot overflow into neighboring nodes. |
+| 2026-07-23 | Bug fix | Replaced fixed-size Mermaid thumbnails with aspect-ratio-aware previews so embedded flowcharts remain readable and scale consistently with software-architecture zoom. |
 
 ## Project Progress
 
@@ -198,3 +200,4 @@ Authentication is currently local email login by default.
 | 2026-07-23 | History-based architecture versions | Any saved architecture snapshot can be previewed read-only and used as the starting content for a new version, with unsaved-draft replacement confirmation and source-version metadata. |
 | 2026-07-23 | Task-board drag feedback | Dragging now keeps a complete issue-card preview directly below the pointer, visually marks the source and destination, and avoids coordinate shifts from the animated page container. |
 | 2026-07-23 | Business-node overflow handling | Long business-detail labels now grow their node up to four lines, remain clipped to the card boundary, and contribute their real height to branch layout and fit-to-view bounds. |
+| 2026-07-23 | Flowchart preview zoom consistency | Embedded Mermaid previews now derive bounded dimensions from the SVG viewBox, preserving source aspect ratio and readable detail through mind-map fit and zoom operations. |

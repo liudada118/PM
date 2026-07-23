@@ -11,6 +11,7 @@ import Drag from "simple-mind-map/src/plugins/Drag.js";
 import Select from "simple-mind-map/src/plugins/Select.js";
 // @ts-ignore
 import KeyboardNavigation from "simple-mind-map/src/plugins/KeyboardNavigation.js";
+import { prepareFlowchartPreviewSvg } from "./flowchartPreview";
 
 // Register plugins
 MindMap.usePlugin(Drag);
@@ -674,15 +675,18 @@ export const MarkmapView = forwardRef<MarkmapActions, MarkmapViewProps>(
                   const thumbId = `fc-thumb-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
                   mermaid.render(thumbId, mermaidContent).then(({ svg }) => {
                     try {
-                      // Convert SVG to data URL for use as node image
-                      const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+                      const preview = prepareFlowchartPreviewSvg(svg);
+                      // Convert the normalized SVG to an object URL for the node image.
+                      const svgBlob = new Blob([preview.svg], {
+                        type: "image/svg+xml;charset=utf-8",
+                      });
                       const url = URL.createObjectURL(svgBlob);
                       // Use SET_NODE_IMAGE command so layout accounts for the image size
                       mindMap.execCommand("SET_NODE_IMAGE", node, {
                         url,
                         title: "流程图预览",
-                        width: 200,
-                        height: 120,
+                        width: preview.width,
+                        height: preview.height,
                         custom: true,
                       });
                     } catch {
