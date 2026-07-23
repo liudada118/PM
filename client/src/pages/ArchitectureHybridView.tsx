@@ -33,6 +33,7 @@ import {
   buildArchitectureHybridLayout,
   collectExpandableDetailNodeIds,
   findContainingArchitectureStage,
+  HYBRID_LAYOUT,
   selectBusinessArchitectureStages,
   type ArchitectureNodeIssue,
 } from "./architectureHybridLayout";
@@ -105,7 +106,7 @@ function HybridArchitectureNode({ data }: NodeProps<HybridFlowNode>) {
       className={`relative flex h-full w-full items-center gap-2 border px-3 shadow-sm transition-[border-color,box-shadow,background-color] ${
         isStage
           ? `rounded-md border-2 ${stageStyle}`
-          : "rounded-md border-border bg-background text-foreground"
+          : "overflow-hidden rounded-md border-border bg-background py-2 text-foreground"
       } ${data.active ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""} ${
         data.selected && !data.active
           ? "border-primary shadow-[0_0_0_2px_hsl(var(--primary)/0.18)]"
@@ -171,7 +172,15 @@ function HybridArchitectureNode({ data }: NodeProps<HybridFlowNode>) {
       )}
 
       <span className="min-w-0 flex-1">
-        <span className="block line-clamp-2 break-all text-sm font-semibold leading-5">
+        <span
+          className="block overflow-hidden break-all text-sm font-semibold leading-5"
+          style={{
+            display: "-webkit-box",
+            WebkitBoxOrient: "vertical",
+            WebkitLineClamp: isStage ? 2 : HYBRID_LAYOUT.detailMaxTextLines,
+          }}
+          title={data.label}
+        >
           {data.label}
         </span>
         <span className="mt-0.5 flex items-center gap-2 text-[10px] opacity-65">

@@ -4,6 +4,7 @@ import {
   buildArchitectureHybridLayout,
   collectExpandableDetailNodeIds,
   findContainingArchitectureStage,
+  getArchitectureDetailNodeHeight,
   HYBRID_LAYOUT,
   selectBusinessArchitectureStages,
 } from "../client/src/pages/architectureHybridLayout";
@@ -47,6 +48,29 @@ function buildLayout(
 }
 
 describe("buildArchitectureHybridLayout", () => {
+  it("grows detail nodes for wrapped labels without exceeding four lines", () => {
+    const shortHeight = getArchitectureDetailNodeHeight({
+      label: "Input",
+      childCount: 0,
+      issueTotal: 0,
+      hasFlowchart: false,
+    });
+    const longHeight = getArchitectureDetailNodeHeight({
+      label:
+        "client/src/components/title/Title.jsx merges the built-in and external systems",
+      childCount: 0,
+      issueTotal: 0,
+      hasFlowchart: false,
+    });
+
+    expect(shortHeight).toBe(HYBRID_LAYOUT.detailHeight);
+    expect(longHeight).toBeGreaterThan(shortHeight);
+    expect(longHeight).toBe(
+      HYBRID_LAYOUT.detailVerticalPadding +
+        HYBRID_LAYOUT.detailMaxTextLines * HYBRID_LAYOUT.detailLineHeight
+    );
+  });
+
   it("uses only explicitly selected business stages", () => {
     const tree = parseArchitectureMarkdown(content);
 
@@ -135,6 +159,39 @@ describe("buildArchitectureHybridLayout", () => {
 
     expect(collapsed.nodes.map(node => node.label)).not.toContain("业务访谈");
     expect(expanded.nodes.map(node => node.label)).toContain("业务访谈");
+  });
+
+  it("keeps variable-height sibling branches from overlapping", () => {
+    const tree = parseArchitectureMarkdown(
+      `# Variable heights
+
+## Stage
+
+### Group
+
+#### A very long architecture detail that wraps across several visible lines in the business view
+
+#### Short detail
+`
+    );
+    const stage = tree.children[0];
+    const layout = buildArchitectureHybridLayout({
+      tree,
+      activeStageId: stage.id,
+      selectedNode: null,
+      nodeIssues: [],
+      flowchartNodePaths: new Set(),
+      businessStageNames: [stage.text],
+      expandedDetailNodeIds: new Set([`detail:${stage.children[0].id}`]),
+    });
+    const siblings = layout.nodes
+      .filter(node => node.kind === "detail" && node.depth === 2)
+      .sort((left, right) => left.position.y - right.position.y);
+
+    expect(siblings).toHaveLength(2);
+    expect(
+      siblings[0].position.y + siblings[0].height + HYBRID_LAYOUT.detailGapY
+    ).toBeLessThanOrEqual(siblings[1].position.y);
   });
 
   it("collects every expandable detail for the active-stage controls", () => {
