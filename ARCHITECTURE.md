@@ -59,6 +59,7 @@ flowchart LR
 - `client/src/pages/IssueBoard.tsx` renders status columns with dnd-kit and updates issue status through `issues.update`.
 - The board's "我的任务" filter matches the dashboard todo scope: assigned, authored, or originally assigned during review.
 - Drag-and-drop status changes use pointer-based column detection and explicit droppable metadata so the target status follows the column under the cursor instead of the nearest column corner.
+- The drag overlay is portaled to `document.body` so the page-entry transform cannot offset fixed-position coordinates. It reuses the complete issue card, centers the card under the pointer through `client/src/pages/issueBoardDrag.ts`, shows a grabbing cursor, leaves a translucent source placeholder, and strengthens the active-column highlight.
 - Failed drag status updates roll back the optimistic board state and display the server error message.
 
 ## Architecture Views and Task Creation
@@ -163,6 +164,7 @@ Authentication is currently local email login by default.
 | 2026-07-23 | Feature | Added a stage-level collapse control for hiding and restoring all right-hand business-architecture details without losing nested expansion state. |
 | 2026-07-23 | Feature | Added business-architecture expand-all and collapse-all canvas controls for recursively opening or compacting the active stage details. |
 | 2026-07-23 | Feature | Reworked architecture version history into read-only previews that can seed a new sequential version without overwriting historical snapshots. |
+| 2026-07-23 | Bug fix | Rebuilt the task-board drag overlay as a full-card body portal and centered it under the pointer to remove page-transform offsets. |
 
 ## Project Progress
 
@@ -193,3 +195,4 @@ Authentication is currently local email login by default.
 | 2026-07-23 | Business detail master folding | The active workflow stage can collapse or restore its entire right-hand detail tree from the connection point while retaining individual node expansion state. |
 | 2026-07-23 | Business detail bulk controls | The business canvas toolbar can recursively expand the active stage or collapse it back to first-level details, with fit-to-view supporting large expanded trees. |
 | 2026-07-23 | History-based architecture versions | Any saved architecture snapshot can be previewed read-only and used as the starting content for a new version, with unsaved-draft replacement confirmation and source-version metadata. |
+| 2026-07-23 | Task-board drag feedback | Dragging now keeps a complete issue-card preview centered under the pointer, visually marks the source and destination, and avoids coordinate shifts from the animated page container. |

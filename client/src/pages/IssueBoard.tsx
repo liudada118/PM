@@ -54,8 +54,10 @@ import {
   BellPlus,
   Clock,
   GitBranch,
+  GripVertical,
 } from "lucide-react";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useLocation } from "wouter";
 import {
   AlertDialog,
@@ -87,9 +89,12 @@ import {
   pointerWithin,
   type DragStartEvent,
   type DragEndEvent,
+  type Modifier,
 } from "@dnd-kit/core";
 import { useDroppable } from "@dnd-kit/core";
 import { useDraggable } from "@dnd-kit/core";
+import { getEventCoordinates } from "@dnd-kit/utilities";
+import { centerDragOverlayOnPointer } from "./issueBoardDrag";
 
 const STATUSES = ["Backlog", "Todo", "In Progress", "In Review", "Done"] as const;
 type Status = (typeof STATUSES)[number];
@@ -133,6 +138,25 @@ const resolveDropStatus = (over: DragEndEvent["over"]): Status | null => {
   return null;
 };
 
+const centerOverlayOnPointer: Modifier = ({
+  activatorEvent,
+  draggingNodeRect,
+  transform,
+}) => {
+  if (!activatorEvent || !draggingNodeRect) return transform;
+
+  const activatorCoordinates = getEventCoordinates(activatorEvent);
+  if (!activatorCoordinates) return transform;
+
+  return centerDragOverlayOnPointer(
+    transform,
+    draggingNodeRect,
+    activatorCoordinates
+  );
+};
+
+const DRAG_OVERLAY_MODIFIERS = [centerOverlayOnPointer];
+
 // ─── Droppable Column ────────────────────────────────────────────────────────
 function DroppableColumn({ status, children }: { status: Status; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({
@@ -142,7 +166,10 @@ function DroppableColumn({ status, children }: { status: Status; children: React
   return (
     <div
       ref={setNodeRef}
-      className={`min-w-[220px] rounded-xl p-2 transition-colors ${isOver ? "bg-primary/5 ring-1 ring-primary/20" : ""}`}
+      data-status-column={status}
+      className={`min-w-[220px] rounded-xl p-2 transition-all duration-150 ${
+        isOver ? "bg-primary/[0.07] ring-2 ring-primary/25 shadow-inner" : ""
+      }`}
     >
       {children}
     </div>
@@ -156,11 +183,23 @@ function DraggableCard({ issue, children }: { issue: any; children: React.ReactN
     data: { type: "issue", issue, status: issue.status },
   });
   const style = {
-    opacity: isDragging ? 0.3 : 1,
-    cursor: "grab",
+    opacity: isDragging ? 0.18 : 1,
+    cursor: isDragging ? "grabbing" : "grab",
   };
   return (
-    <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`touch-none rounded-xl transition-opacity ${
+        isDragging
+          ? "outline outline-1 outline-dashed outline-primary/40"
+          : ""
+      }`}
+      data-issue-id={issue.id}
+      data-dragging={isDragging ? "true" : undefined}
+      {...listeners}
+      {...attributes}
+    >
       {children}
     </div>
   );
@@ -196,6 +235,16 @@ export default function IssueBoard() {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
+
+  useEffect(() => {
+    if (activeId === null) return;
+
+    const previousCursor = document.body.style.cursor;
+    document.body.style.cursor = "grabbing";
+    return () => {
+      document.body.style.cursor = previousCursor;
+    };
+  }, [activeId]);
 
   const createMutation = trpc.issues.create.useMutation({
     onSuccess: () => {
@@ -287,6 +336,10 @@ export default function IssueBoard() {
   // ─── Drag handlers ──────────────────────────────────────────────────────────
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as number);
+  };
+
+  const handleDragCancel = () => {
+    setActiveId(null);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -383,6 +436,7 @@ export default function IssueBoard() {
             sensors={sensors}
             collisionDetection={pointerWithin}
             onDragStart={handleDragStart}
+            onDragCancel={handleDragCancel}
             onDragEnd={handleDragEnd}
           >
             <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3 overflow-x-auto">
@@ -454,14 +508,32 @@ export default function IssueBoard() {
               })}
             </div>
 
-            {/* Drag Overlay */}
-            <DragOverlay>
-              {activeIssue ? (
-                <div className="p-3 rounded-xl border border-primary/30 bg-background shadow-lg w-[220px] opacity-90">
-                  <p className="text-xs font-medium truncate">{activeIssue.title}</p>
-                </div>
-              ) : null}
-            </DragOverlay>
+            {/* Keep the fixed overlay outside the animated page transform. */}
+            {typeof document !== "undefined" &&
+              createPortal(
+                <DragOverlay
+                  modifiers={DRAG_OVERLAY_MODIFIERS}
+                  dropAnimation={{
+                    duration: 180,
+                    easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+                  }}
+                  zIndex={1100}
+                >
+                  {activeIssue ? (
+                    <IssueCard
+                      issue={activeIssue}
+                      currentProjectId={currentProjectId}
+                      getUserName={getUserName}
+                      onEdit={() => undefined}
+                      onDelete={() => undefined}
+                      onStatusChange={() => undefined}
+                      onClick={() => undefined}
+                      dragPreview
+                    />
+                  ) : null}
+                </DragOverlay>,
+                document.body
+              )}
           </DndContext>
         )}
 
@@ -577,6 +649,7 @@ function IssueCard({
   onDelete,
   onStatusChange,
   onClick,
+  dragPreview = false,
 }: {
   issue: any;
   currentProjectId: number | null;
@@ -585,6 +658,7 @@ function IssueCard({
   onDelete: () => void;
   onStatusChange: (s: Status) => void;
   onClick: () => void;
+  dragPreview?: boolean;
 }) {
   const priorityCfg = PRIORITY_CONFIG[issue.priority as keyof typeof PRIORITY_CONFIG] || PRIORITY_CONFIG.medium;
   const PriorityIcon = priorityCfg.icon;
@@ -595,46 +669,57 @@ function IssueCard({
 
   return (
     <div
-      className={`p-3 rounded-xl border border-border/50 ${statusCfg.bg} hover:border-primary/30 transition-all hover-lift group cursor-pointer`}
-      onClick={onClick}
+      className={`w-full rounded-xl border p-3 ${statusCfg.bg} ${
+        dragPreview
+          ? "cursor-grabbing border-primary/50 shadow-2xl ring-2 ring-primary/25"
+          : "group cursor-grab border-border/50 transition-all hover-lift hover:border-primary/30 active:cursor-grabbing"
+      }`}
+      data-drag-preview={dragPreview ? "true" : undefined}
+      onClick={dragPreview ? undefined : onClick}
     >
       <div className="flex items-start justify-between gap-1 mb-2">
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
           <TypeIcon className={`h-3.5 w-3.5 shrink-0 ${typeCfg.color}`} />
           <p className="text-xs font-medium leading-snug truncate">{issue.title}</p>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className="opacity-0 group-hover:opacity-100 h-5 w-5 flex items-center justify-center rounded hover:bg-muted transition-all shrink-0"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <MoreHorizontal className="h-3 w-3 text-muted-foreground" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44 text-xs">
-            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}>
-              <Edit3 className="mr-2 h-3 w-3" /> 编辑
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            {STATUSES.filter((s) => s !== issue.status).map((s) => (
-              <DropdownMenuItem
-                key={s}
-                onClick={(e) => { e.stopPropagation(); onStatusChange(s); }}
+        {dragPreview ? (
+          <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary/10 text-primary">
+            <GripVertical className="h-3.5 w-3.5" />
+          </div>
+        ) : (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="opacity-0 group-hover:opacity-100 h-5 w-5 flex items-center justify-center rounded hover:bg-muted transition-all shrink-0"
+                onClick={(e) => e.stopPropagation()}
               >
-                <div className={`mr-2 h-1.5 w-1.5 rounded-full ${STATUS_CONFIG[s].dot}`} />
-                移至 {STATUS_CONFIG[s].label}
+                <MoreHorizontal className="h-3 w-3 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44 text-xs">
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}>
+                <Edit3 className="mr-2 h-3 w-3" /> 编辑
               </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            >
-              <Trash2 className="mr-2 h-3 w-3" /> 删除
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              <DropdownMenuSeparator />
+              {STATUSES.filter((s) => s !== issue.status).map((s) => (
+                <DropdownMenuItem
+                  key={s}
+                  onClick={(e) => { e.stopPropagation(); onStatusChange(s); }}
+                >
+                  <div className={`mr-2 h-1.5 w-1.5 rounded-full ${STATUS_CONFIG[s].dot}`} />
+                  移至 {STATUS_CONFIG[s].label}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              >
+                <Trash2 className="mr-2 h-3 w-3" /> 删除
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       <div className="flex items-center gap-1.5 flex-wrap">
