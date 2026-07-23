@@ -14,6 +14,16 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -49,9 +59,8 @@ import {
   Code2,
   Image as ImageIcon,
   History,
-  RotateCcw,
-  Clock,
   Eye,
+  GitFork,
   Workflow,
   ListChecks,
   Maximize2,
@@ -60,6 +69,10 @@ import { useLocation } from "wouter";
 import { MarkmapView, type MarkmapActions } from "./ArchitectureMarkmap";
 import { ArchitectureHybridView } from "./ArchitectureHybridView";
 import { parseArchitectureMarkdown } from "./architectureTree";
+import {
+  createVersionDraftFromSnapshot,
+  type ArchitectureVersionDraftBase,
+} from "./architectureVersioning";
 import { VisualFlowEditor } from "@/components/VisualFlowEditor";
 import { useProject } from "@/contexts/ProjectContext";
 
@@ -277,13 +290,7 @@ export function ArchitectureEditor({ id }: { id: number }) {
   const { data: doc, isLoading, refetch } = trpc.architecture.get.useQuery({ id });
   const { data: nodeIssues } = trpc.architecture.getNodeIssues.useQuery({ archDocId: id });
   const updateMutation = trpc.architecture.update.useMutation({
-    onSuccess: () => {
-      refetch();
-      setEditContent(null);
-      setEditTitle(null);
-      setHasChanges(false);
-      toast.success("已保存");
-    },
+    onSuccess: () => refetch(),
   });
 
   // Parse URL query param for node highlight (from issue link)
@@ -309,6 +316,8 @@ export function ArchitectureEditor({ id }: { id: number }) {
   );
   const [showVersionPanel, setShowVersionPanel] = useState(false);
   const [previewVersionId, setPreviewVersionId] = useState<number | null>(null);
+  const [versionBase, setVersionBase] = useState<ArchitectureVersionDraftBase | null>(null);
+  const [showVersionBaseConfirm, setShowVersionBaseConfirm] = useState(false);
   const [taskCreateMode, setTaskCreateMode] = useState<"parent" | "children">("parent");
   // showFlowchartEditor removed - flowchart now opens inline via flowchartView
 
@@ -357,26 +366,15 @@ export function ArchitectureEditor({ id }: { id: number }) {
 
   // Query versions for this doc
   const { data: versions } = trpc.architecture.listVersions.useQuery({ archDocId: id });
-  const { data: previewVersion } = trpc.architecture.getVersionContent.useQuery(
-    { versionId: previewVersionId! },
-    { enabled: !!previewVersionId }
-  );
+  const { data: previewVersion, isFetching: isPreviewVersionLoading } =
+    trpc.architecture.getVersionContent.useQuery(
+      { versionId: previewVersionId! },
+      { enabled: !!previewVersionId }
+    );
   const createVersionMutation = trpc.architecture.createVersion.useMutation({
     onSuccess: () => {
       utils.architecture.listVersions.invalidate({ archDocId: id });
     },
-  });
-  const restoreVersionMutation = trpc.architecture.restoreVersion.useMutation({
-    onSuccess: () => {
-      refetch();
-      utils.architecture.listVersions.invalidate({ archDocId: id });
-      setPreviewVersionId(null);
-      setShowVersionPanel(false);
-      setEditContent(null);
-      setEditTitle(null);
-      toast.success("已恢复到指定版本");
-    },
-    onError: () => toast.error("恢复失败"),
   });
 
   // Query flowcharts for this doc
@@ -465,6 +463,17 @@ export function ArchitectureEditor({ id }: { id: number }) {
   // Initialize edit state when doc loads
   const content = editContent ?? doc?.content ?? "";
   const title = editTitle ?? doc?.title ?? "";
+  const activePreviewVersion =
+    previewVersionId !== null && previewVersion?.id === previewVersionId
+      ? previewVersion
+      : null;
+  const isPreviewingVersion = activePreviewVersion !== null;
+  const displayedContent = activePreviewVersion
+    ? activePreviewVersion.content ?? ""
+    : content;
+  const displayedTitle = activePreviewVersion
+    ? activePreviewVersion.title
+    : title;
   const availableBusinessStages = useMemo(() => {
     const tree = parseArchitectureMarkdown(content);
     return tree.children;
@@ -600,20 +609,67 @@ export function ArchitectureEditor({ id }: { id: number }) {
     setHasChanges(true);
   };
 
+  const startVersionDraft = () => {
+    if (!previewVersion || previewVersion.id !== previewVersionId) return;
+
+    const draft = createVersionDraftFromSnapshot(previewVersion);
+    setEditTitle(draft.title);
+    setEditContent(draft.content);
+    setVersionBase(draft.base);
+    setHasChanges(true);
+    setPreviewVersionId(null);
+    setShowVersionPanel(false);
+    setShowVersionBaseConfirm(false);
+    setSelectedNode(null);
+    setFlowchartView(null);
+    toast.success(`已基于 v${draft.base.version} 创建新版本草稿`);
+  };
+
+  const requestVersionDraft = () => {
+    if (!isPreviewingVersion) return;
+    if (hasChanges) {
+      setShowVersionBaseConfirm(true);
+      return;
+    }
+    startVersionDraft();
+  };
+
   const handleSave = async () => {
+    if (!hasChanges || isPreviewingVersion) return;
+
     const updates: any = {};
     if (editContent !== null) updates.content = editContent;
     if (editTitle !== null) updates.title = editTitle;
-    await updateMutation.mutateAsync({ id, ...updates });
-    // Auto-create version snapshot on save
     const currentTitle = editTitle ?? doc?.title ?? "未命名";
     const currentContent = editContent ?? doc?.content ?? null;
-    createVersionMutation.mutate({
-      archDocId: id,
-      title: currentTitle,
-      content: currentContent,
-    });
-    setHasChanges(false);
+    let contentSaved = false;
+
+    try {
+      await updateMutation.mutateAsync({ id, ...updates });
+      contentSaved = true;
+      const createdVersion = await createVersionMutation.mutateAsync({
+        archDocId: id,
+        title: currentTitle,
+        content: currentContent,
+        description: versionBase?.description,
+      });
+
+      setEditContent(null);
+      setEditTitle(null);
+      setHasChanges(false);
+      setVersionBase(null);
+      toast.success(
+        versionBase
+          ? `已基于 v${versionBase.version} 创建 v${createdVersion.version}`
+          : `已保存为 v${createdVersion.version}`
+      );
+    } catch {
+      toast.error(
+        contentSaved
+          ? "内容已保存，但创建版本失败，请重试"
+          : "保存失败"
+      );
+    }
   };
 
   const { data: allIssues } = trpc.issues.list.useQuery(undefined, { enabled: showLinkDialog });
@@ -907,11 +963,22 @@ export function ArchitectureEditor({ id }: { id: number }) {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <input
-            className="min-w-0 flex-1 bg-transparent text-lg font-semibold border-none outline-none focus:ring-0 sm:min-w-[200px]"
-            value={title}
+            className="min-w-0 flex-1 bg-transparent text-lg font-semibold border-none outline-none focus:ring-0 read-only:cursor-default sm:min-w-[200px]"
+            value={displayedTitle}
             onChange={(e) => handleTitleChange(e.target.value)}
+            readOnly={isPreviewingVersion}
             placeholder="架构文档标题"
           />
+          {activePreviewVersion && (
+            <Badge variant="outline" className="shrink-0 text-xs">
+              预览 v{activePreviewVersion.version}
+            </Badge>
+          )}
+          {versionBase && !isPreviewingVersion && (
+            <Badge variant="outline" className="shrink-0 text-xs">
+              基于 v{versionBase.version}
+            </Badge>
+          )}
           {hasChanges && (
             <Badge variant="secondary" className="text-xs">未保存</Badge>
           )}
@@ -923,7 +990,7 @@ export function ArchitectureEditor({ id }: { id: number }) {
                 <TabsTrigger
                   value="mindmap"
                   className="text-xs px-3 h-7"
-                  disabled={updateViewModeMutation.isPending}
+                  disabled={updateViewModeMutation.isPending || isPreviewingVersion}
                 >
                   <Network className="h-3.5 w-3.5 mr-1.5" />
                   软件架构
@@ -931,12 +998,16 @@ export function ArchitectureEditor({ id }: { id: number }) {
                 <TabsTrigger
                   value="hybrid"
                   className="text-xs px-3 h-7"
-                  disabled={updateViewModeMutation.isPending}
+                  disabled={updateViewModeMutation.isPending || isPreviewingVersion}
                 >
                   <Workflow className="h-3.5 w-3.5 mr-1.5" />
                   业务架构
                 </TabsTrigger>
-                <TabsTrigger value="markdown" className="text-xs px-3 h-7">
+                <TabsTrigger
+                  value="markdown"
+                  className="text-xs px-3 h-7"
+                  disabled={isPreviewingVersion}
+                >
                   <FileText className="h-3.5 w-3.5 mr-1.5" />
                   Markdown
                 </TabsTrigger>
@@ -961,6 +1032,7 @@ export function ArchitectureEditor({ id }: { id: number }) {
               variant="outline"
               className="shrink-0"
               onClick={openBusinessStageDialog}
+              disabled={isPreviewingVersion}
             >
               <ListChecks className="h-3.5 w-3.5 mr-1.5" />
               业务阶段
@@ -973,7 +1045,10 @@ export function ArchitectureEditor({ id }: { id: number }) {
             size="sm"
             variant="outline"
             className="shrink-0"
-            onClick={() => setShowVersionPanel(!showVersionPanel)}
+            onClick={() => {
+              if (showVersionPanel) setPreviewVersionId(null);
+              setShowVersionPanel(!showVersionPanel);
+            }}
           >
             <History className="h-3.5 w-3.5 mr-1.5" />
             版本
@@ -985,10 +1060,15 @@ export function ArchitectureEditor({ id }: { id: number }) {
             size="sm"
             className="shrink-0"
             onClick={handleSave}
-            disabled={!hasChanges || updateMutation.isPending}
+            disabled={
+              !hasChanges ||
+              isPreviewingVersion ||
+              updateMutation.isPending ||
+              createVersionMutation.isPending
+            }
           >
             <Save className="h-3.5 w-3.5 mr-1.5" />
-            保存
+            {versionBase ? "保存为新版本" : "保存"}
           </Button>
         </div>
       </div>
@@ -1003,7 +1083,16 @@ export function ArchitectureEditor({ id }: { id: number }) {
                 <History className="h-4 w-4" />
                 版本历史
               </h3>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setShowVersionPanel(false); setPreviewVersionId(null); }}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                aria-label="关闭版本历史"
+                onClick={() => {
+                  setShowVersionPanel(false);
+                  setPreviewVersionId(null);
+                }}
+              >
                 <X className="h-3.5 w-3.5" />
               </Button>
             </div>
@@ -1017,7 +1106,11 @@ export function ArchitectureEditor({ id }: { id: number }) {
                     className={`p-2.5 rounded-lg border cursor-pointer transition-all hover:bg-accent/50 ${
                       previewVersionId === v.id ? "border-primary bg-primary/5" : "border-transparent"
                     }`}
-                    onClick={() => setPreviewVersionId(v.id)}
+                    onClick={() => {
+                      setPreviewVersionId(v.id);
+                      setSelectedNode(null);
+                      setFlowchartView(null);
+                    }}
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-medium">v{v.version}</span>
@@ -1025,31 +1118,32 @@ export function ArchitectureEditor({ id }: { id: number }) {
                         {new Date(v.createdAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </span>
                     </div>
-                    <p className="text-xs text-muted-foreground truncate">{v.creatorName || "未知"}</p>
+                    <p className="truncate text-xs font-medium" title={v.title}>{v.title}</p>
+                    <p className="mt-0.5 text-[10px] text-muted-foreground">
+                      {v.creatorName || "未知"}
+                    </p>
+                    {v.description && (
+                      <p className="mt-1 line-clamp-2 text-[10px] text-muted-foreground">
+                        {v.description}
+                      </p>
+                    )}
                     {previewVersionId === v.id && (
-                      <div className="mt-2 flex gap-1">
+                      <div className="mt-2 space-y-1.5">
+                        <p className="flex items-center gap-1 text-[10px] text-primary">
+                          <Eye className="h-3 w-3" />
+                          {isPreviewVersionLoading ? "正在载入预览" : "正在只读预览"}
+                        </p>
                         <Button
                           size="sm"
-                          variant="outline"
-                          className="h-6 text-xs flex-1"
-                          onClick={(e) => { e.stopPropagation(); /* preview is shown in main area */ }}
-                        >
-                          <Eye className="h-3 w-3 mr-1" />
-                          预览
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="default"
-                          className="h-6 text-xs flex-1"
+                          className="h-7 w-full text-xs"
+                          disabled={!isPreviewingVersion || isPreviewVersionLoading}
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (confirm("确定要恢复到这个版本吗？当前未保存的修改将丢失。")) {
-                              restoreVersionMutation.mutate({ archDocId: id, versionId: v.id });
-                            }
+                            requestVersionDraft();
                           }}
                         >
-                          <RotateCcw className="h-3 w-3 mr-1" />
-                          恢复
+                          <GitFork className="mr-1 h-3 w-3" />
+                          基于此版本新建
                         </Button>
                       </div>
                     )}
@@ -1062,23 +1156,41 @@ export function ArchitectureEditor({ id }: { id: number }) {
 
         {/* Main content */}
         <div className="flex-1 overflow-hidden relative flex flex-col">
+          {activePreviewVersion && (
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b bg-muted/60 px-4 py-2">
+              <p className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                <Eye className="h-3.5 w-3.5 shrink-0 text-primary" />
+                <span className="truncate">
+                  正在预览 v{activePreviewVersion.version}，历史版本为只读内容
+                </span>
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 shrink-0 text-xs"
+                onClick={() => setPreviewVersionId(null)}
+              >
+                返回当前内容
+              </Button>
+            </div>
+          )}
         {viewMode !== "markdown" ? (
           <>
           <div className="w-full relative h-full">
             {viewMode === "hybrid" ? (
               <ArchitectureHybridView
-                content={content}
+                content={displayedContent}
                 selectedNode={selectedNode}
                 onSelectNode={setSelectedNode}
                 nodeIssues={nodeIssues || []}
                 businessStageNames={savedBusinessStageNames}
                 flowchartNodePaths={allFlowchartNodePaths}
-                onOpenFlowchart={handleOpenFlowchart}
+                onOpenFlowchart={isPreviewingVersion ? undefined : handleOpenFlowchart}
               />
             ) : (
               <MarkmapView
                 ref={markmapRef}
-                content={content}
+                content={displayedContent}
                 selectedNode={selectedNode}
                 onSelectNode={setSelectedNode}
                 onContentChange={(newContent) => {
@@ -1086,14 +1198,13 @@ export function ArchitectureEditor({ id }: { id: number }) {
                 }}
                 nodeIssues={nodeIssues || []}
                 flowchartNodePaths={allFlowchartNodePaths}
-                onOpenFlowchart={(nodePath) => {
-                  handleOpenFlowchart(nodePath);
-                }}
+                onOpenFlowchart={isPreviewingVersion ? undefined : handleOpenFlowchart}
+                readonly={isPreviewingVersion}
               />
             )}
 
             {/* Node info panel - with status indicators */}
-            {selectedNode && (
+            {selectedNode && !isPreviewingVersion && (
               <div className="absolute bottom-4 right-4 w-80 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm border rounded-xl shadow-lg p-3 z-10 max-h-[45vh] overflow-y-auto">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-2">
@@ -1538,8 +1649,9 @@ export function ArchitectureEditor({ id }: { id: number }) {
           <div className="h-full p-4">
             <Textarea
               className="h-full w-full font-mono text-sm resize-none border-muted focus:border-primary"
-              value={content}
+              value={displayedContent}
               onChange={(e) => handleContentChange(e.target.value)}
+              readOnly={isPreviewingVersion}
               placeholder="使用 Markdown 格式编写架构文档...&#10;&#10;# 系统架构&#10;## 模块一&#10;- 子模块 A&#10;- 子模块 B"
             />
           </div>
@@ -1629,6 +1741,26 @@ export function ArchitectureEditor({ id }: { id: number }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={showVersionBaseConfirm}
+        onOpenChange={setShowVersionBaseConfirm}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>基于历史版本新建？</AlertDialogTitle>
+            <AlertDialogDescription>
+              当前未保存的修改会被所选历史版本替换。历史版本本身不会被修改，保存后会创建一个新的版本。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={startVersionDraft}>
+              基于此版本新建
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

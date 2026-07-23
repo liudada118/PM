@@ -79,6 +79,8 @@ flowchart LR
 - Parent-only creation links one issue to the selected node and appends the child nodes as a Markdown checklist in the issue description.
 - Child-node creation creates one issue per child node, applies the shared task fields to each issue, and links each new issue to its matching child node.
 - The architecture task creation dialog constrains width and height, wraps long child-node labels, and scrolls internally to avoid overflowing the viewport.
+- Architecture version history treats saved snapshots as immutable. Selecting a snapshot loads its title and Markdown into a read-only preview, and the user can copy that snapshot into a new editable draft without changing the historical record.
+- Saving a draft based on history updates the current architecture document, creates the next sequential snapshot through the existing version API, and records the source as `基于 vN 创建` in the version description.
 
 ## Authentication
 
@@ -160,6 +162,7 @@ Authentication is currently local email login by default.
 | 2026-07-22 | Feature | Added software-architecture full overview and explicit per-document business-stage selection so unrelated modules are excluded from business flows. |
 | 2026-07-23 | Feature | Added a stage-level collapse control for hiding and restoring all right-hand business-architecture details without losing nested expansion state. |
 | 2026-07-23 | Feature | Added business-architecture expand-all and collapse-all canvas controls for recursively opening or compacting the active stage details. |
+| 2026-07-23 | Feature | Reworked architecture version history into read-only previews that can seed a new sequential version without overwriting historical snapshots. |
 
 ## Project Progress
 
@@ -189,3 +192,4 @@ Authentication is currently local email login by default.
 | 2026-07-22 | Selective business architecture | Software architecture can expand and fit the entire map, while each document independently selects which second-level modules participate in its business workflow. |
 | 2026-07-23 | Business detail master folding | The active workflow stage can collapse or restore its entire right-hand detail tree from the connection point while retaining individual node expansion state. |
 | 2026-07-23 | Business detail bulk controls | The business canvas toolbar can recursively expand the active stage or collapse it back to first-level details, with fit-to-view supporting large expanded trees. |
+| 2026-07-23 | History-based architecture versions | Any saved architecture snapshot can be previewed read-only and used as the starting content for a new version, with unsaved-draft replacement confirmation and source-version metadata. |
