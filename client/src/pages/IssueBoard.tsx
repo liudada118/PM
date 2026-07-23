@@ -94,7 +94,7 @@ import {
 import { useDroppable } from "@dnd-kit/core";
 import { useDraggable } from "@dnd-kit/core";
 import { getEventCoordinates } from "@dnd-kit/utilities";
-import { centerDragOverlayOnPointer } from "./issueBoardDrag";
+import { positionDragOverlayBelowPointer } from "./issueBoardDrag";
 
 const STATUSES = ["Backlog", "Todo", "In Progress", "In Review", "Done"] as const;
 type Status = (typeof STATUSES)[number];
@@ -138,7 +138,7 @@ const resolveDropStatus = (over: DragEndEvent["over"]): Status | null => {
   return null;
 };
 
-const centerOverlayOnPointer: Modifier = ({
+const placeOverlayBelowPointer: Modifier = ({
   activatorEvent,
   draggingNodeRect,
   transform,
@@ -148,14 +148,14 @@ const centerOverlayOnPointer: Modifier = ({
   const activatorCoordinates = getEventCoordinates(activatorEvent);
   if (!activatorCoordinates) return transform;
 
-  return centerDragOverlayOnPointer(
+  return positionDragOverlayBelowPointer(
     transform,
     draggingNodeRect,
     activatorCoordinates
   );
 };
 
-const DRAG_OVERLAY_MODIFIERS = [centerOverlayOnPointer];
+const DRAG_OVERLAY_MODIFIERS = [placeOverlayBelowPointer];
 
 // ─── Droppable Column ────────────────────────────────────────────────────────
 function DroppableColumn({ status, children }: { status: Status; children: React.ReactNode }) {
